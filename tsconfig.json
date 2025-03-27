@@ -5,6 +5,7 @@
     "experimentalDecorators": true,
     // Modules
     "module": "ESNext",
+    "sourceMap": true,
     "moduleResolution": "node",
     "resolveJsonModule": true,
     // Babel handles transpiling and no need for declaration files

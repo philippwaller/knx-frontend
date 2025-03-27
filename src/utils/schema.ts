@@ -509,3 +509,16 @@ export const lightSchema: SettingsGroup[] = [
     ],
   },
 ];
+
+export interface Schema {
+  type: string;
+  name: string;
+  properties?: Schema[];
+  required?: boolean;
+  ui_options?: any;
+  allow_none?: boolean;
+  default?: any;
+  description?: string;
+  options?: any[];
+  value: any;
+}

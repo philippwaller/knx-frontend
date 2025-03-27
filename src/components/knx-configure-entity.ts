@@ -24,6 +24,7 @@ import type { EntityData, ErrorDescription, KnxEntityData } from "../types/entit
 import type { KNX } from "../types/knx";
 import type { PlatformInfo } from "../utils/common";
 import type { SettingsGroup, SelectorSchema, GroupSelect, GASchema } from "../utils/schema";
+import { co } from "@fullcalendar/core/internal-common";
 
 const logger = new KNXLogger("knx-configure-entity");
 
@@ -162,6 +163,8 @@ export class KNXConfigureEntity extends LitElement {
   private _generateItem(selector: SelectorSchema, errors?: ErrorDescription[]) {
     switch (selector.type) {
       case "group_address":
+        console.log("config:", this.config!.knx[selector.name] ?? {})
+        console.log("options:", selector.options)
         return html`
           <knx-group-address-selector
             .hass=${this.hass}

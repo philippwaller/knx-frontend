@@ -1,12 +1,8 @@
 import { customElement } from "lit/decorators";
-
 import type { RouterOptions } from "@ha/layouts/hass-router-page";
-
 import { KnxRouter } from "../knx-router";
 import { KNXLogger } from "../tools/knx-logger";
-
 const logger = new KNXLogger("router");
-
 @customElement("knx-entities-router")
 class KnxEntitiesRouter extends KnxRouter {
   protected routerOptions: RouterOptions = {
@@ -34,10 +30,16 @@ class KnxEntitiesRouter extends KnxRouter {
           return import("./entities_create");
         },
       },
+      edit2: {
+        tag: "simple-greeting",
+        load: () => {
+          logger.debug("Importing knx-entity-config");
+          return import("./test");
+        },
+      },
     },
   };
 }
-
 declare global {
   interface HTMLElementTagNameMap {
     "knx-entities-router": KnxEntitiesRouter;

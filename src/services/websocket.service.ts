@@ -13,6 +13,7 @@ import type {
   UpdateEntityData,
   DeviceCreateData,
 } from "../types/entity_data";
+import { Schema } from "utils/schema";
 
 export const getKnxInfoData = (hass: HomeAssistant): Promise<KNXInfoData> =>
   hass.callWS({
@@ -113,3 +114,10 @@ export const createDevice = (
     type: "knx/create_device",
     ...deviceData,
   });
+
+export const getEntitySchemas = (hass: HomeAssistant): Promise<Schema[]> =>
+  hass.callWS({
+    type: "knx/get_entity_schemas",
+  });
+
+
