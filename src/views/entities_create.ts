@@ -1,4 +1,5 @@
 import { mdiPlus, mdiFloppy } from "@mdi/js";
+import { FALLBACK_DOMAIN_ICONS } from "@ha/data/icons";
 import type { TemplateResult, PropertyValues } from "lit";
 import { LitElement, html, css, nothing } from "lit";
 import { customElement, property, state, query } from "lit/decorators";
@@ -25,6 +26,7 @@ import {
   updateEntity,
   getEntityConfig,
   validateEntity,
+  getEntitySchemas,
 } from "services/websocket.service";
 import type { EntityData, ErrorDescription, CreateEntityResult } from "types/entity_data";
 
@@ -34,6 +36,15 @@ import { dragDropContext, DragDropContext } from "../utils/drag-drop-context";
 import { KNXLogger } from "../tools/knx-logger";
 import type { KNX } from "../types/knx";
 import type { PlatformInfo } from "../utils/common";
+import { PlatformConfig } from "@ha/data/entity_registry";
+import { dynamic } from "superstruct";
+import { stat } from "fs-extra";
+import { 
+  getSchemaTranslation, 
+  localizeSchema, 
+  preloadSchemaTranslations 
+} from "../services/schema-localize.service";
+
 
 const logger = new KNXLogger("knx-create-entity");
 
@@ -63,6 +74,10 @@ export class KNXCreateEntity extends LitElement {
 
   private entityPlatform?: string;
 
+  private entityPlatformConfigs?: PlatformConfig[];
+
+  private remoteEntityTypes: String[] = [];
+
   private entityId?: string; // only used for "edit" intent
 
   private _dragDropContextProvider = new ContextProvider(this, {
@@ -72,12 +87,28 @@ export class KNXCreateEntity extends LitElement {
     }),
   });
 
-  protected firstUpdated() {
+  protected async firstUpdated() {
     if (!this.knx.project) {
       this.knx.loadProject().then(() => {
         this.requestUpdate();
       });
     }
+    
+    await preloadSchemaTranslations(this.hass);
+    // Call getEntitySchemas
+    getEntitySchemas(this.hass).then((schemas) => {
+      console.log("Entity schemas:", schemas);
+      this.entityPlatformConfigs = schemas;
+
+      for (const schema of schemas) {
+        if (Array.isArray(schema.properties)) {
+          const platformElement = schema.properties.find(prop => prop.name === "platform");
+          if (platformElement?.["value"]) {
+            this.remoteEntityTypes.push(platformElement["value"]);
+          }
+        }
+      }
+    });
   }
 
   protected willUpdate(changedProperties: PropertyValues<this>) {
@@ -167,6 +198,31 @@ export class KNXCreateEntity extends LitElement {
   }
 
   private _renderTypeSelection(): TemplateResult {
+    let remoteTypes = this.remoteEntityTypes!.map((entityType) => ({
+      name: localizeSchema(
+        this.hass,
+        "config_panel.config." + entityType + ".config.label",
+      ) ?? entityType,
+      description: localizeSchema(
+          this.hass, 
+         "config_panel.config." + entityType + ".config.description",
+        ),
+      iconPath: FALLBACK_DOMAIN_ICONS.sensor,
+      iconColor: "var(--blue-color)",
+      path: `/knx/entities/create/${entityType}`,
+    }));
+
+    let localTypes = Object.entries(platformConstants).map(([platform, platformInfo]) => ({
+      name: platformInfo.name,
+      description: platformInfo.description,
+      iconPath: platformInfo.iconPath,
+      iconColor: platformInfo.color,
+      path: `/knx/entities/create/${platform}`,
+    }));
+
+    console.log("Remote types:", remoteTypes);
+    console.log("Local types:", localTypes);
+
     return html`
       <hass-subpage
         .hass=${this.hass}
@@ -180,13 +236,7 @@ export class KNXCreateEntity extends LitElement {
             <ha-navigation-list
               .hass=${this.hass}
               .narrow=${this.narrow}
-              .pages=${Object.entries(platformConstants).map(([platform, platformInfo]) => ({
-                name: platformInfo.name,
-                description: platformInfo.description,
-                iconPath: platformInfo.iconPath,
-                iconColor: platformInfo.color,
-                path: `/knx/entities/create/${platform}`,
-              }))}
+              .pages=${[...remoteTypes,...localTypes]}
               has-secondary
               .label=${"Select entity type"}
             ></ha-navigation-list>

@@ -1,5 +1,5 @@
 import type { HomeAssistant } from "@ha/types";
-import type { ExtEntityRegistryEntry } from "@ha/data/entity_registry";
+import type { ExtEntityRegistryEntry, PlatformConfig } from "@ha/data/entity_registry";
 import type { DeviceRegistryEntry } from "@ha/data/device_registry";
 import type {
   KNXInfoData,
@@ -113,3 +113,10 @@ export const createDevice = (
     type: "knx/create_device",
     ...deviceData,
   });
+
+export const getEntitySchemas = (hass: HomeAssistant): Promise<PlatformConfig[]> =>
+  hass.callWS({
+    type: "knx/get_entity_schemas",
+  });
+
+
