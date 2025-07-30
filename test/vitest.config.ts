@@ -17,14 +17,6 @@ export default defineConfig({
       reporter: ["text", "html", "json", "json-summary"],
       provider: "v8",
       reportsDirectory: "test/coverage",
-      // Coverage thresholds are currently disabled to allow gradual improvement
-      // When enabled, these values enforce minimum coverage requirements in CI pipeline
-      // thresholds: {
-      //     #branches: 80,
-      //     #functions: 80,
-      //     #lines: 80,
-      //     #statements: 80,
-      // },
     },
   },
 });
