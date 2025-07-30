@@ -64,7 +64,7 @@ jobs:
         run: yarn run test:coverage
 
       - name: Publish Coverage Report to PR
-        uses: davelosert/vitest-coverage-report-action@v2
+        uses: davelosert/vitest-coverage-report-action@v2.8.3
         # always() to also generate the report if tests are failing
         if: always()
         with:
