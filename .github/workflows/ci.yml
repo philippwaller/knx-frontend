@@ -63,7 +63,7 @@ jobs:
       - name: Run tests with coverage
         run: yarn run test:coverage
 
-      - name: Vitest Coverage Report
+      - name: Publish Coverage Report to PR
         uses: davelosert/vitest-coverage-report-action@v2
         if: always()
         with:
