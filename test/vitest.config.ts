@@ -11,7 +11,6 @@ export default defineConfig({
       IS_TEST: "true",
     },
     exclude: ["homeassistant-frontend/**/*", "**/node_modules/**", "build/**/*"],
-    setupFiles: ["./test/setup.ts"],
     coverage: {
       include: ["src/**/*.ts"],
       reporter: ["text", "html", "json", "json-summary"],
