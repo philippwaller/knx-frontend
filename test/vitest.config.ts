@@ -20,10 +20,10 @@ export default defineConfig({
       // Coverage thresholds are currently disabled to allow gradual improvement
       // When enabled, these values enforce minimum coverage requirements in CI pipeline
       // thresholds: {
-      //     branches: 80,
-      //     functions: 80,
-      //     lines: 80,
-      //     statements: 80,
+      //     #branches: 80,
+      //     #functions: 80,
+      //     #lines: 80,
+      //     #statements: 80,
       // },
     },
   },
