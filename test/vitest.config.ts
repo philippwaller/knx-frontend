@@ -17,8 +17,15 @@ export default defineConfig({
       reporter: ["text", "html", "json", "json-summary"],
       provider: "v8",
       reportsDirectory: "test/coverage",
-      // Coverage thresholds are currently disabled to allow gradual improvement
-      // When enabled, these values enforce minimum coverage requirements in CI pipeline
+      
+      // Coverage thresholds are currently disabled to allow gradual improvement of test coverage.
+      // To enable coverage requirements in the CI pipeline:
+      // 1. Uncomment the 'thresholds' section below
+      // 2. Remove the '#' symbol from each threshold value (e.g., change '#80' to '80')
+      // 
+      // Note: The '#' symbols are required even in comments because vitest-coverage-report-action
+      // uses regex parsing to extract thresholds and ignores comment syntax entirely.
+      // Without the '#' symbols, the action would try to parse these as active thresholds.
       // thresholds: {
       //     branches: #80,
       //     functions: #80,
