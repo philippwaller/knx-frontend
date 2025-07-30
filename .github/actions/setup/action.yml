@@ -1,0 +1,50 @@
+name: 'Setup Node and Dependencies'
+description: 'Setup Node.js environment and install dependencies with caching'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check out files from GitHub
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: ".nvmrc"
+        cache: yarn
+
+    - name: Get submodule commit
+      shell: bash
+      id: submodule-commit
+      run: |
+        if [ -f .gitmodules ]; then
+          SUBMODULE_COMMIT=$(git ls-tree HEAD homeassistant-frontend | awk '{print $3}' || echo "none")
+          echo "commit=${SUBMODULE_COMMIT}" >> $GITHUB_OUTPUT
+        else
+          echo "commit=none" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Cache submodules
+      uses: actions/cache@v4
+      with:
+        path: homeassistant-frontend
+        key: submodules-${{ hashFiles('.gitmodules') }}-${{ steps.submodule-commit.outputs.commit }}
+        restore-keys: |
+          submodules-${{ hashFiles('.gitmodules') }}-
+          submodules-
+
+    - name: Cache node_modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          homeassistant-frontend/node_modules
+        key: node-modules-${{ hashFiles('yarn.lock', 'homeassistant-frontend/yarn.lock') }}
+        restore-keys: |
+          node-modules-
+
+    - name: Install dependencies
+      shell: bash
+      run: script/bootstrap

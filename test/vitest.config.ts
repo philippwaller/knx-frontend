@@ -17,12 +17,10 @@ export default defineConfig({
       provider: "v8",
       reportsDirectory: "test/coverage",
       thresholds: {
-        global: {
           branches: 80,
           functions: 80,
           lines: 80,
           statements: 80,
-        },
       },
     },
   },

@@ -13,17 +13,8 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - name: Check out files from GitHub
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: ".nvmrc"
-          cache: yarn
-      - name: Install dependencies
-        run: script/bootstrap
+      - name: Setup Node and Dependencies
+        uses: ./.github/actions/setup
 
       - name: Run eslint
         run: yarn run lint:eslint
@@ -38,19 +29,8 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - name: Check out files from GitHub
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: ".nvmrc"
-          cache: yarn
-      
-      - name: Install dependencies
-        run: script/bootstrap
+      - name: Setup Node and Dependencies
+        uses: ./.github/actions/setup
 
       - name: Run tests
         run: yarn test
@@ -58,78 +38,22 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    strategy:
-      matrix:
-        include:
-          - branch: main
-            artifact: main
-          - branch: ${{ github.head_ref }}
-            artifact: pull-request
-
     permissions:
       contents: read
-
+      pull-requests: write
     steps:
-      - name: Check out files from GitHub
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.branch }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          submodules: recursive
-      
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: ".nvmrc"
-          cache: yarn
-      
-      - name: Install dependencies
-        run: script/bootstrap
+      - name: Setup Node and Dependencies
+        uses: ./.github/actions/setup
 
       - name: Run tests with coverage
         run: yarn run test:coverage
 
-      - name: Upload Coverage Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.artifact }}
-          path: test/coverage/
-          retention-days: 1
-
-  report-coverage:
-    name: Coverage Report
-    needs: coverage
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Check out files from GitHub
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Download PR Coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-pull-request
-          path: coverage
-
-      - name: Download Main Coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-main
-          path: coverage-main
-
-      - name: Coverage Report with Comparison
+      - name: Vitest Coverage Report
         uses: davelosert/vitest-coverage-report-action@v2
+        if: always()
         with:
-          json-summary-path: coverage/coverage-summary.json
-          json-final-path: coverage/coverage-final.json
-          json-summary-compare-path: coverage-main/coverage-summary.json
+          json-summary-path: ./test/coverage/coverage-summary.json
+          json-final-path: ./test/coverage/coverage-final.json
           vite-config-path: ./test/vitest.config.ts
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -137,17 +61,8 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - name: Check out files from GitHub
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: ".nvmrc"
-          cache: yarn
-      - name: Install dependencies
-        run: script/bootstrap
+      - name: Setup Node and Dependencies
+        uses: ./.github/actions/setup
 
       - name: Build
         run: yarn build
