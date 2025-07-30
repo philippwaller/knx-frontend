@@ -65,6 +65,7 @@ jobs:
 
       - name: Publish Coverage Report to PR
         uses: davelosert/vitest-coverage-report-action@v2
+        # always() to also generate the report if tests are failing
         if: always()
         with:
           json-summary-path: ./test/coverage/coverage-summary.json
