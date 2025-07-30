@@ -22,18 +22,6 @@ runs:
           knx-frontend-deps-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-
           knx-frontend-deps-${{ runner.os }}-
 
-    - name: Cache homeassistant-frontend dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          homeassistant-frontend/.yarn/cache
-          homeassistant-frontend/.yarn/install-state.gz
-          homeassistant-frontend/node_modules
-        key: ha-frontend-deps-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('homeassistant-frontend/yarn.lock') }}
-        restore-keys: |
-          ha-frontend-deps-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-
-          ha-frontend-deps-${{ runner.os }}-
-
     - name: Install dependencies
       shell: bash
       run: script/bootstrap
