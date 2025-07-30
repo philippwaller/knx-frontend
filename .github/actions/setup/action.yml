@@ -9,6 +9,7 @@ runs:
       id: setup-node
       with:
         node-version-file: ".nvmrc"
+        cache: 'yarn'
 
     - name: Cache knx-frontend dependencies
       uses: actions/cache@v4
