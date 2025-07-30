@@ -56,15 +56,26 @@ jobs:
         run: yarn test
 
   coverage:
-    name: Coverage Report
+    name: Coverage
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    strategy:
+      matrix:
+        include:
+          - branch: main
+            artifact: main
+          - branch: ${{ github.head_ref }}
+            artifact: pull-request
+
     permissions:
       contents: read
-      pull-requests: write
+
     steps:
       - name: Check out files from GitHub
         uses: actions/checkout@v4
         with:
+          ref: ${{ matrix.branch }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
           submodules: recursive
       
       - name: Setup Node
@@ -79,12 +90,46 @@ jobs:
       - name: Run tests with coverage
         run: yarn run test:coverage
 
-      - name: Vitest Coverage Report
-        uses: davelosert/vitest-coverage-report-action@v2
-        if: always()
+      - name: Upload Coverage Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          json-summary-path: ./test/coverage/coverage-summary.json
-          json-final-path: ./test/coverage/coverage-final.json
+          name: coverage-${{ matrix.artifact }}
+          path: test/coverage/
+          retention-days: 1
+
+  report-coverage:
+    name: Coverage Report
+    needs: coverage
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Check out files from GitHub
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download PR Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-pull-request
+          path: coverage
+
+      - name: Download Main Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-main
+          path: coverage-main
+
+      - name: Coverage Report with Comparison
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          json-summary-path: coverage/coverage-summary.json
+          json-final-path: coverage/coverage-final.json
+          json-summary-compare-path: coverage-main/coverage-summary.json
           vite-config-path: ./test/vitest.config.ts
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
