@@ -1,16 +1,247 @@
-#!/bin/sh
-# Resolve all frontend dependencies that the application requires to develop.
+#!/usr/bin/env bash
+# Resolve all frontend dependencies required for development.
 
-# Stop on errors
-set -e
+set -Eeuo pipefail # Fail on errors and unset variables
 
-cd "$(dirname "$0")/.."
+# ── Styling (ANSI colors) ──────────────────────────────────────────────────────
+BOLD='\033[1m'
+DIM='\033[2m'
+RESET='\033[0m'
+CYAN='\033[36m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+RED='\033[31m'
 
-if [ ! -d "./homeassistant-frontend/src" ]; then
-  cd homeassistant-frontend
-  git submodule init
-  git submodule update
-  cd ..
+section() {
+  echo
+  echo -e "${BOLD}${CYAN}[bootstrap]${RESET} ── ${BOLD}$1${RESET}"
+}
+
+info() { echo -e "   🔧 $1"; }
+note() { echo -e "   ℹ️  ${DIM}$1${RESET}"; }
+ok() { echo -e "   ✅ ${GREEN}$1${RESET}"; }
+warn() { echo -e "   ⚠️  ${YELLOW}$1${RESET}"; }
+error() { echo -e "   ❌ ${RED}$1${RESET}"; }
+
+# ── Repo root (prefer git, fallback to script dir/..) ─────────────────────────
+section "📍 Locate repository root"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "$0")/.." && pwd))"
+if ! cd "$ROOT"; then
+  error "Failed to change directory to repository root: $ROOT" >&2
+  exit 1
+fi
+ok "Repository root: ${RESET}$ROOT"
+
+#── nvm (lazy load if available) ───────────────────────────────────────────────
+if ! command -v nvm >/dev/null 2>&1; then
+  NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$NVM_DIR/nvm.sh"
+  fi
 fi
 
-yarn install
+# ── Node.js version handling ───────────────────────────────────────────────────
+summaryNodeVersionCheckSkipped=false
+
+section "⚡ Node.js setup"
+if command -v nvm >/dev/null 2>&1 && [ -f .nvmrc ]; then
+  # Try nvm use first (faster if version is already installed and active)
+  if nvm use >/dev/null 2>&1; then
+    ok "Node.js version $(nvm current) is active"
+  else
+    info "Installing and activating Node.js version from .nvmrc"
+    echo
+    if nvm install; then
+      echo
+      ok "Node.js version installed and activated via nvm"
+    else
+      echo
+      warn "Failed to install Node.js version with nvm" >&2
+    fi
+  fi
+
+elif command -v node >/dev/null 2>&1; then
+  summaryNodeVersionCheckSkipped=true
+  warn "nvm not found - Please manually verify you’re using the correct Node.js version:"
+  if [ -f .nvmrc ]; then
+    requiredVersion=$(tr -d '\r\n' < .nvmrc)
+    info "Required: ${BOLD}$requiredVersion${RESET}, Current: ${BOLD}$(node -v)${RESET}" >&2
+  else
+    note "No .nvmrc present – cannot verify required Node.js version automatically." >&2
+    info "Current: ${BOLD}$(node -v)${RESET}" >&2
+  fi
+  currentVersion=$(node -v)
+  note "Tip: Install nvm to auto-use the correct version – https://github.com/nvm-sh/nvm" >&2
+else
+  error "nvm not available and Node.js not found in PATH!" >&2
+  note "Please install Node.js or nvm (recommended): https://github.com/nvm-sh/nvm" >&2
+  exit 1
+fi
+
+# ── Submodule: homeassistant-frontend ──────────────────────────────────────────
+section "🔗 Submodule check"
+
+# helpers
+SUBMODULE_DIR="homeassistant-frontend"
+
+# Return shortened (7+ chars) commit hash or original ref if not resolvable
+shortRef() {
+  local dir="$1"
+  local ref="$2"
+  git -C "$dir" rev-parse --short "$ref" 2>/dev/null || echo "$ref"
+}
+
+# Returns the commit ref that the submodule is currently pinned to (index/tree of HEAD)
+getSubmoduleHead() {
+  local dir="$1"
+  git ls-tree HEAD "$dir" 2>/dev/null | awk '{print $3}'
+}
+
+# Returns latest tag (by creator date) for given repo dir
+getLatestTag() {
+  local dir="$1"
+  git -C "$dir" tag --sort=-creatordate | head -n 1
+}
+
+# Format a commit (short hash, date, optional tags). Usage: fmtCommit <dir> <commit>
+fmtCommit() {
+  local dir="$1"
+  local commit="$2"
+  local short=$(shortRef "$dir" "$commit")
+  local date=$(git -C "$dir" show -s --format=%ci "$commit" 2>/dev/null | cut -d' ' -f1,2 || echo "unknown")
+  local tags=$(git -C "$dir" tag --points-at "$commit" 2>/dev/null | paste -sd' ' -)
+  printf "%b%s%b %b%s%b%s" "$BOLD" "$short" "$RESET" "$DIM" "$date" "$RESET" "${tags:+ 🏷️: $tags}"
+}
+
+getCommitFromLabel() {
+  local dir="$1"
+  local label="$2"
+  git -C "$dir" rev-list -n 1 "refs/tags/$label" 2>/dev/null || echo ""
+}
+
+# Diff summary between two commits in a repo dir. Usage: getDiff <dir> <from> <to>
+getDiff() {
+  local dir="$1"
+  local from="$2"
+  local to="$3"
+  [ -n "$from" ] && [ -n "$to" ] || { printf 'n/a\n'; return 0; }
+  if out="$(git -C "$dir" rev-list --left-right --count "$from...$to" 2>/dev/null)"; then
+    set -- $out; local behind="$2"; local ahead="$1"
+    local short_from=$(shortRef "$dir" "$from")
+    local short_to=$(shortRef "$dir" "$to")
+    printf '+%s / -%s commits → https://github.com/home-assistant/frontend/compare/%s...%s\n' \
+      "$ahead" "$behind" "$short_from" "$short_to"
+  else
+    printf 'n/a\n'
+  fi
+}
+
+# Count releases since given commit. Usage: getReleasesSince <dir> <commit>
+getReleasesSince() {
+  local dir="$1"
+  local commit="$2"
+  # Get the commit date of our reference commit
+  local ref_date=$(git -C "$dir" show -s --format=%ct "$commit" 2>/dev/null || echo "0")
+  # Count tags created after that date (using awk for speed)
+  git -C "$dir" tag --sort=creatordate --format='%(creatordate:unix)' | awk -v ref="$ref_date" '$1 > ref' | wc -l | tr -d ' '
+}
+
+summarySubmoduleMismatch=false
+
+if [ ! -d "./$SUBMODULE_DIR/src" ]; then
+  info "Initializing $SUBMODULE_DIR submodule"
+  if ! git submodule update --init --recursive "$SUBMODULE_DIR"; then
+    error "Failed to initialize $SUBMODULE_DIR submodule" >&2
+    exit 1
+  fi
+  ok "Submodule initialized"
+elif ! git submodule status "$SUBMODULE_DIR" 2>/dev/null | grep -q '^ '; then
+  expected=$(getSubmoduleHead "$SUBMODULE_DIR")
+  current=$(git -C "$SUBMODULE_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
+
+  summarySubmoduleMismatch=true
+  warn "homeassistant-frontend submodule mismatch" >&2
+  note "Expected : $(fmtCommit "$SUBMODULE_DIR" "$expected")" >&2
+  note "Current  : $(fmtCommit "$SUBMODULE_DIR" "$current")" >&2
+
+  diff_result=$(getDiff "$SUBMODULE_DIR" "$expected" "$current")
+  if [ -n "$diff_result" ]; then
+    note "Diff     : $diff_result" >&2
+  fi
+  info "Fix      : git submodule update --init --recursive $SUBMODULE_DIR" >&2
+else
+  ok "Submodule is initialized"
+fi
+
+# ── Check homeassistant-frontend submodule ───────────────────────────────────
+section "🏷️  Check if homeassistant-frontend submodule is on the latest release"
+
+summaryTagsNotFetched=false
+summaryVersionCheckSkipped=false
+summaryNewReleaseAvailable=false
+
+if ! git -C "$SUBMODULE_DIR" fetch --tags --quiet 2>/dev/null; then
+  summaryTagsNotFetched=true
+  warn "Could not fetch tags for $SUBMODULE_DIR (offline?) - using local tags only"
+fi
+
+head=$(getSubmoduleHead "$SUBMODULE_DIR")
+latest_tag=$(getLatestTag "$SUBMODULE_DIR")
+
+if [ -n "$latest_tag" ]; then
+  tag_commit=$(getCommitFromLabel "$SUBMODULE_DIR" "$latest_tag")
+
+  if [ -z "$tag_commit" ]; then
+  summaryVersionCheckSkipped=true
+    warn "No commit found for tag $latest_tag in $SUBMODULE_DIR. Skipping version check."
+  elif [ "$head" = "$tag_commit" ]; then
+    ok "Using latest release: ${RESET}$latest_tag"
+  else
+    summaryNewReleaseAvailable=true
+    release_count=$(getReleasesSince "$SUBMODULE_DIR" "$head")
+    warn "New release available: ${RESET}$latest_tag ${DIM}($release_count behind)${RESET}"
+    note "Head     : $(fmtCommit "$SUBMODULE_DIR" "$head")"
+    note "Latest   : $(fmtCommit "$SUBMODULE_DIR" "$latest_tag")"
+    diff_result=$(getDiff "$SUBMODULE_DIR" "$head" "$latest_tag")
+    if [ -n "$diff_result" ]; then
+      note "Diff     : $diff_result"
+    fi
+    info "Update   : ./script/upgrade-frontend"
+  fi
+else
+  summaryVersionCheckSkipped=true
+  warn "No tags found in homeassistant-frontend submodule. Skipping version check."
+fi
+
+# ── Install deps ───────────────────────────────────────────────────────────────
+section "📦 Dependencies"
+info "Installing dependencies (yarn)"
+echo
+if yarn install; then
+  echo
+  ok "Dependencies installed"
+else
+  echo
+  error "Dependency installation failed (yarn install)" >&2
+  exit 1
+fi
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+section "📋 Summary"
+if [ "$summaryNodeVersionCheckSkipped" = true ]; then
+  warn "Unable to verify Node.js version automatically. Please check it manually or install nvm."
+fi
+if [ "$summarySubmoduleMismatch" = true ]; then
+  warn "homeassistant-frontend submodule is not on the expected commit."
+fi
+if [ "$summaryTagsNotFetched" = true ]; then
+  warn "Some tags could not be fetched from the remote repository."
+fi
+if [ "$summaryVersionCheckSkipped" = true ]; then
+  warn "Version check was skipped due to missing tags or commits."
+fi
+if [ "$summaryNewReleaseAvailable" = true ]; then
+  warn "New release is available for homeassistant-frontend submodule."
+fi
+ok "Bootstrap completed successfully"

@@ -21,12 +21,28 @@ provides a user interface for interacting with the KNX integration.
 
 ## Development
 
-If you check this repository out for the first time please run the following command to init the submodules:
+### Prerequisites
+
+Make sure the following tools are installed before starting development:
+
+- **[Node.js](https://nodejs.org/)**: Use the version specified in `.nvmrc` (recommended via [nvm](https://github.com/nvm-sh/nvm))
+- **[Yarn](https://yarnpkg.com/)**: Package manager for JavaScript/TypeScript dependencies
+- **[Make](https://www.gnu.org/software/make/)**: For running tasks such as (`bootstrap`, `develop`, `build`)
+- **[Git](https://git-scm.com/)**: For submodule management
+
+### Getting Started
+
+If you are setting up the project for the first time or after pulling changes from Git that affect dependencies or submodules, run:
 
 ```shell
 $ make bootstrap
 ...
 ```
+
+This will automatically:
+- Ensure the correct Node.js version is loaded via nvm (if available)
+- Initialize or update the `homeassistant-frontend` submodule
+- Install all required JavaScript/TypeScript dependencies
 
 ### Development build (watcher)
 
