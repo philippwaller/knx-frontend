@@ -8,6 +8,7 @@ import type { SortingDirection } from "@ha/components/data-table/ha-data-table";
 import { getGroupMonitorInfo } from "../../../services/websocket.service";
 import { TelegramBufferService } from "../services/telegram-buffer-service";
 import { ConnectionService } from "../services/connection-service";
+import { DistinctCountBitsetService } from "../services/distinct-count-bitset-service";
 import { KNXLogger } from "../../../tools/knx-logger";
 import { TelegramRow, type OffsetMicros } from "../types/telegram-row";
 import type { TelegramDict } from "../../../types/websocket";
@@ -66,6 +67,9 @@ export class GroupMonitorController implements ReactiveController {
 
   // Telegram buffer service
   private _telegramBuffer = new TelegramBufferService(2000);
+
+  // Bitset-based distinct count service
+  private _bitsetService = new DistinctCountBitsetService();
 
   // UI state
   private _selectedTelegramId: string | null = null;
@@ -456,6 +460,7 @@ export class GroupMonitorController implements ReactiveController {
     const preserveValues = this._createFilteredDistinctValues();
 
     this._telegramBuffer.clear();
+    this._bitsetService.clear();
     this._resetDistinctValues(preserveValues);
     this._isReloadEnabled = true;
     this.host.requestUpdate();
@@ -703,6 +708,7 @@ export class GroupMonitorController implements ReactiveController {
         // Update distinct values by removing counts for removed telegrams
         if (removedTelegrams.length > 0) {
           this._removeFromDistinctValues(removedTelegrams);
+          this._bitsetService.remove(removedTelegrams);
         }
       }
 
@@ -713,6 +719,7 @@ export class GroupMonitorController implements ReactiveController {
       // Update distinct values incrementally
       if (removed.length > 0) {
         this._removeFromDistinctValues(removed);
+        this._bitsetService.remove(removed);
       }
 
       if (added.length > 0) {
@@ -720,6 +727,7 @@ export class GroupMonitorController implements ReactiveController {
         for (const telegram of added) {
           this._addToDistinctValues(telegram);
         }
+        this._bitsetService.add(added);
       }
 
       if (this._connectionError !== null) {
@@ -751,10 +759,12 @@ export class GroupMonitorController implements ReactiveController {
       const removedTelegrams = this._telegramBuffer.add(telegramRow);
       if (removedTelegrams.length > 0) {
         this._removeFromDistinctValues(removedTelegrams);
+        this._bitsetService.remove(removedTelegrams);
       }
 
       // Add new telegram to distinct values
       this._addToDistinctValues(telegramRow);
+      this._bitsetService.add(telegramRow);
 
       this.host.requestUpdate();
     } else if (!this._isReloadEnabled) {

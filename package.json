@@ -146,6 +146,7 @@
     "stacktrace-js": "2.0.2",
     "superstruct": "2.0.2",
     "tinykeys": "3.0.0",
+    "typedfastbitset": "0.6.1",
     "ua-parser-js": "2.0.4",
     "vue": "2.7.16",
     "vue2-daterange-picker": "0.6.8",
