@@ -28,6 +28,9 @@ export class DistinctCountBitsetService {
   // Monotonically increasing index to avoid shifting bit positions
   private _nextIndex = 0;
 
+  // Pool of freed indices to avoid unbounded growth
+  private _freeIndices: number[] = [];
+
   constructor() {
     const fields: FilterField[] = ["source", "destination", "direction", "telegramtype"];
     for (const field of fields) {
@@ -45,6 +48,7 @@ export class DistinctCountBitsetService {
     this._idToIndex.clear();
     this._allBitset = new TypedFastBitSet();
     this._nextIndex = 0;
+    this._freeIndices = [];
   }
 
   /**
@@ -61,7 +65,8 @@ export class DistinctCountBitsetService {
   public add(telegrams: TelegramLike | TelegramLike[]): void {
     const array = Array.isArray(telegrams) ? telegrams : [telegrams];
     for (const telegram of array) {
-      const index = this._nextIndex++;
+      const index =
+        this._freeIndices.length > 0 ? (this._freeIndices.pop() as number) : this._nextIndex++;
       this._idToIndex.set(telegram.id, index);
       this._addToBitsets(telegram, index);
       this._allBitset.add(index);
@@ -93,6 +98,8 @@ export class DistinctCountBitsetService {
 
       this._idToIndex.delete(telegram.id);
       this._allBitset.remove(index);
+      // Recycle the freed index for future additions
+      this._freeIndices.push(index);
     }
   }
 
@@ -181,12 +188,11 @@ export class DistinctCountBitsetService {
    * Filters the provided telegram array using the current bitset filters
    */
   public filterTelegrams<T extends TelegramLike>(telegrams: readonly T[], filters: FilterMap): T[] {
-    const bitset = this.getFilteredBitset(filters);
+    // Early exit if no filter values are set in any field
+    const hasAnyFilter = Object.values(filters).some((set) => set.size > 0);
+    if (!hasAnyFilter) return [...telegrams];
 
-    // If bitset represents all telegrams, return a shallow copy of the array
-    if (bitset.size() === this._allBitset.size()) {
-      return [...telegrams];
-    }
+    const bitset = this.getFilteredBitset(filters);
 
     const result: T[] = [];
     for (const telegram of telegrams) {
