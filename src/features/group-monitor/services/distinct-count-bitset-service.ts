@@ -92,10 +92,16 @@ export class DistinctCountBitsetService {
 
   /**
    * Gets the distinct count for a field/value combination under the given filters
+   * If no filters are provided, returns the total count for the field/value combination
    */
-  public getDistinctCount(field: FilterField, value: string, filters: FilterMap): number {
+  public getDistinctCount(field: FilterField, value: string, filters?: FilterMap): number {
     const base = this._bitsets.get(field)?.get(value);
     if (!base) return 0;
+
+    // If no filters provided, return total count
+    if (!filters) {
+      return base.size();
+    }
 
     const result = base.clone();
 

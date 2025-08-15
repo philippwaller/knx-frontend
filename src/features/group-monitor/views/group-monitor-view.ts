@@ -158,7 +158,7 @@ export class KNXGroupMonitor extends LitElement {
    * Called once when the component is first rendered
    */
   public async firstUpdated(): Promise<void> {
-    await this.controller.setup(this.hass);
+    await this.controller.setup(this.hass, this.knx);
   }
 
   /**

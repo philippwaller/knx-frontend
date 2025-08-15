@@ -13,6 +13,8 @@ import { KNXLogger } from "../../../tools/knx-logger";
 import { TelegramRow, type OffsetMicros } from "../types/telegram-row";
 import type { TelegramDict } from "../../../types/websocket";
 import { extractMicrosecondsFromIso } from "../../../utils/format";
+import AddressNameService from "../services/address-name-service";
+import type { KNX } from "../../../types/knx";
 
 const logger = new KNXLogger("group_monitor_controller");
 
@@ -70,6 +72,12 @@ export class GroupMonitorController implements ReactiveController {
 
   // Bitset-based distinct count service
   private _bitsetService = new DistinctCountBitsetService();
+
+  // Name resolution service using KNX project data
+  private _nameService = new AddressNameService();
+
+  // KNX context for project data access
+  private _knx?: KNX;
 
   // UI state
   private _selectedTelegramId: string | null = null;
@@ -134,8 +142,10 @@ export class GroupMonitorController implements ReactiveController {
   /**
    * Setup method to be called from the host's firstUpdated
    */
-  public async setup(hass: HomeAssistant): Promise<void> {
+  public async setup(hass: HomeAssistant, knx: KNX): Promise<void> {
     if (this._connectionService.isConnected) return;
+
+    this._knx = knx;
 
     if (!(await this._loadRecentTelegrams(hass))) return;
 
@@ -284,7 +294,32 @@ export class GroupMonitorController implements ReactiveController {
         });
       }
 
-      // Create a deep copy of distinct values with filtered counts initialized to 0
+      // Calculate relative time offsets
+      for (let i = 0; i < filteredTelegrams.length; i++) {
+        const telegram = filteredTelegrams[i];
+
+        if ((sortColumn === "timestampIso" && sortDirection) || !sortColumn) {
+          let previousTelegram: TelegramRow | null = null;
+
+          if (sortDirection === "desc" && sortColumn) {
+            previousTelegram = i < filteredTelegrams.length - 1 ? filteredTelegrams[i + 1] : null;
+          } else {
+            previousTelegram = i > 0 ? filteredTelegrams[i - 1] : null;
+          }
+
+          telegram.offset = this._calculateTelegramOffset(telegram, previousTelegram);
+        } else {
+          telegram.offset = null;
+        }
+      }
+
+      const filtersMap: FilterMap = {
+        source: new Set(this._filters.source || []),
+        destination: new Set(this._filters.destination || []),
+        direction: new Set(this._filters.direction || []),
+        telegramtype: new Set(this._filters.telegramtype || []),
+      };
+
       const distinctValuesWithFilteredCounts: DistinctValues = {
         source: {},
         destination: {},
@@ -292,61 +327,18 @@ export class GroupMonitorController implements ReactiveController {
         telegramtype: {},
       };
 
-      // Initialize all distinct values with filteredCount = 0
-      const fields = Object.keys(distinctValues) as FilterField[];
-      for (const field of fields) {
+      for (const field of FILTER_FIELDS) {
         for (const [id, info] of Object.entries(distinctValues[field])) {
           distinctValuesWithFilteredCounts[field][id] = {
             id: info.id,
             name: info.name,
-            totalCount: info.totalCount,
-            filteredCount: 0,
+            totalCount: this._bitsetService.getDistinctCount(field, id),
+            filteredCount: this._bitsetService.getDistinctCount(field, id, filtersMap),
           };
         }
       }
 
-      // Count filtered occurrences and calculate offsets in the same loop
-      for (let i = 0; i < filteredTelegrams.length; i++) {
-        const telegram = filteredTelegrams[i];
-
-        // Calculate relative time offset only when sorting by timestamp or natrural order
-        if ((sortColumn === "timestampIso" && sortDirection) || !sortColumn) {
-          // For timestamp sorting, we want to show the time difference since the chronologically previous telegram
-          let previousTelegram: TelegramRow | null = null;
-
-          if (sortDirection === "desc" && sortColumn) {
-            // In descending order (newest first): [10:30, 10:25, 10:20]
-            // The chronologically previous telegram is at i+1 (older timestamp)
-            previousTelegram = i < filteredTelegrams.length - 1 ? filteredTelegrams[i + 1] : null;
-          } else {
-            // In ascending order (oldest first): [10:20, 10:25, 10:30]
-            // The chronologically previous telegram is at i-1 (earlier timestamp)
-            previousTelegram = i > 0 ? filteredTelegrams[i - 1] : null;
-          }
-
-          telegram.offset = this._calculateTelegramOffset(telegram, previousTelegram);
-        } else {
-          // For non-timestamp sorting, reset offset to null
-          telegram.offset = null;
-        }
-
-        // Count distinct values
-        for (const field of fields) {
-          const extracted = this._extractTelegramField(telegram, field);
-          if (!extracted) continue;
-
-          const { id } = extracted;
-          const distinctValue = distinctValuesWithFilteredCounts[field][id];
-          if (distinctValue) {
-            distinctValue.filteredCount = (distinctValue.filteredCount || 0) + 1;
-          }
-        }
-      }
-
-      return {
-        filteredTelegrams,
-        distinctValues: distinctValuesWithFilteredCounts,
-      };
+      return { filteredTelegrams, distinctValues: distinctValuesWithFilteredCounts };
     },
   );
 
@@ -521,9 +513,15 @@ export class GroupMonitorController implements ReactiveController {
   ): { id: string; name: string } | null {
     switch (field) {
       case "source":
-        return { id: telegram.sourceAddress, name: telegram.sourceText || "" };
+        return {
+          id: telegram.sourceAddress,
+          name: this._nameService.getIndividualAddressName(telegram.sourceAddress),
+        };
       case "destination":
-        return { id: telegram.destinationAddress, name: telegram.destinationText || "" };
+        return {
+          id: telegram.destinationAddress,
+          name: this._nameService.getGroupAddressName(telegram.destinationAddress),
+        };
       case "direction":
         return { id: telegram.direction, name: "" };
       case "telegramtype":
@@ -534,7 +532,7 @@ export class GroupMonitorController implements ReactiveController {
   }
 
   /**
-   * Adds a telegram to distinct values tracking (total counts only)
+   * Adds a telegram to distinct values tracking (names only, counts handled by bitset service)
    */
   private _addToDistinctValues(telegram: TelegramRow): void {
     for (const field of FILTER_FIELDS) {
@@ -545,19 +543,13 @@ export class GroupMonitorController implements ReactiveController {
       }
 
       const { id, name } = extracted;
-      if (!this._distinctValues[field][id]) {
+      const existing = this._distinctValues[field][id];
+      if (!existing) {
         this._distinctValues[field][id] = {
           id,
           name,
-          totalCount: 0,
+          totalCount: 0, // Will be calculated by bitset service
         };
-      }
-
-      this._distinctValues[field][id].totalCount++;
-
-      // Update name if it was empty and we have a name
-      if (this._distinctValues[field][id].name === "" && name) {
-        this._distinctValues[field][id].name = name;
       }
     }
 
@@ -566,26 +558,30 @@ export class GroupMonitorController implements ReactiveController {
   }
 
   /**
-   * Removes telegrams from distinct values tracking (total counts only)
+   * Removes telegrams from distinct values tracking (cleanup of unused entries)
    */
   private _removeFromDistinctValues(telegrams: TelegramRow[]): void {
     if (telegrams.length === 0) return;
 
-    for (const telegram of telegrams) {
-      for (const field of FILTER_FIELDS) {
-        const extracted = this._extractTelegramField(telegram, field);
-        if (!extracted) continue;
+    // After removing telegrams from bitset, check if any distinct values are no longer present
+    for (const field of FILTER_FIELDS) {
+      const fieldValues = this._distinctValues[field];
+      const idsToRemove: string[] = [];
 
-        const { id } = extracted;
-        const distinctValue = this._distinctValues[field][id];
-        if (!distinctValue) continue;
-
-        distinctValue.totalCount--;
-
-        // Remove entry if total count reaches zero
-        if (distinctValue.totalCount <= 0) {
-          delete this._distinctValues[field][id];
+      for (const [id] of Object.entries(fieldValues)) {
+        // Check if this value still exists in the bitset service
+        if (this._bitsetService.getDistinctCount(field, id) === 0) {
+          // Only remove if it's not in active filters (preserve filter names)
+          const activeFilterValues = this._filters[field] || [];
+          if (!activeFilterValues.includes(id)) {
+            idsToRemove.push(id);
+          }
         }
+      }
+
+      // Remove the unused entries
+      for (const id of idsToRemove) {
+        delete this._distinctValues[field][id];
       }
     }
 
@@ -623,7 +619,7 @@ export class GroupMonitorController implements ReactiveController {
   }
 
   /**
-   * Removes distinct values with totalCount 0 that are no longer in active filters
+   * Removes distinct values with no telegrams that are no longer in active filters
    * This cleans up filter values that were preserved but are no longer selected
    */
   private _cleanupUnusedFilterValues(): void {
@@ -633,9 +629,12 @@ export class GroupMonitorController implements ReactiveController {
       const activeFilterValues = this._filters[field] || [];
       const fieldValues = this._distinctValues[field];
 
-      for (const [value, info] of Object.entries(fieldValues)) {
-        // Remove if totalCount is 0 and value is not in active filters
-        if (info.totalCount === 0 && !activeFilterValues.includes(value)) {
+      for (const [value] of Object.entries(fieldValues)) {
+        // Remove if no telegrams exist and value is not in active filters
+        if (
+          this._bitsetService.getDistinctCount(field, value) === 0 &&
+          !activeFilterValues.includes(value)
+        ) {
           delete this._distinctValues[field][value];
           hasChanges = true;
         }
@@ -695,6 +694,15 @@ export class GroupMonitorController implements ReactiveController {
     try {
       const info = await getGroupMonitorInfo(hass);
       this._isProjectLoaded = info.project_loaded;
+
+      if (info.project_loaded) {
+        if (this._knx && !this._knx.project) {
+          await this._knx.loadProject();
+        }
+        this._nameService.setProject(this._knx?.project?.knxproject ?? null);
+      } else {
+        this._nameService.setProject(null);
+      }
 
       // Calculate dynamic telegram storage limit
       const telegramsLength = info.recent_telegrams.length;
