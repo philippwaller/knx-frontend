@@ -1,4 +1,4 @@
-import { mdiNetwork, mdiFolderMultipleOutline, mdiFileTreeOutline } from "@mdi/js";
+import { mdiNetwork, mdiFolderMultipleOutline, mdiFileTreeOutline, mdiGraphOutline } from "@mdi/js";
 import { customElement, property } from "lit/decorators";
 
 import type { RouterOptions } from "@ha/layouts/hass-router-page";
@@ -31,6 +31,11 @@ const knxMainTabs = (hasProject: boolean): PageNavigation[] => [
           translationKey: "project_title",
           path: `${BASE_URL}/project`,
           iconPath: mdiFileTreeOutline,
+        },
+        {
+          translationKey: "network_visualization_title",
+          path: `${BASE_URL}/network_visualization`,
+          iconPath: mdiGraphOutline,
         },
       ]
     : []),
@@ -71,6 +76,13 @@ export class KnxRouter extends HassRouterPage {
         load: () => {
           logger.debug("Importing knx-project-view");
           return import("./views/project_view");
+        },
+      },
+      network_visualization: {
+        tag: "knx-network-visualization",
+        load: () => {
+          logger.debug("Importing knx-network-visualization");
+          return import("./views/network_visualization_view");
         },
       },
       entities: {

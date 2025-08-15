@@ -1,6 +1,7 @@
-import type { LitElement } from "lit";
+import type { LitElement, PropertyValues } from "lit";
 import { css, html } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
+import { provide } from "@lit/context";
 
 import { applyThemesOnElement } from "@ha/common/dom/apply_themes_on_element";
 import { fireEvent } from "@ha/common/dom/fire_event";
@@ -16,6 +17,7 @@ import { KnxElement } from "./knx";
 import "./knx-router";
 import type { KNX } from "./types/knx";
 import type { LocationChangedEvent } from "./types/navigation";
+import { themesContext, type Themes } from "./contexts/themes-context";
 
 declare global {
   // for fire event
@@ -34,6 +36,10 @@ class KnxFrontend extends KnxElement {
 
   @property({ attribute: false }) public route!: Route;
 
+  @provide({ context: themesContext })
+  @state()
+  private _themes!: Themes;
+
   protected async firstUpdated(_changedProps) {
     if (!this.hass) {
       return;
@@ -41,6 +47,10 @@ class KnxFrontend extends KnxElement {
     if (!this.knx) {
       await this._initKnx();
     }
+
+    // Initialize themes context
+    this._updateThemes();
+
     this.addEventListener("knx-location-changed", (e) => this._setRoute(e as LocationChangedEvent));
 
     this.addEventListener("knx-reload", async (_) => {
@@ -68,6 +78,13 @@ class KnxFrontend extends KnxElement {
     });
 
     makeDialogManager(this, this.shadowRoot!);
+  }
+
+  protected willUpdate(changedProps: PropertyValues) {
+    super.willUpdate(changedProps);
+    if (changedProps.has("hass")) {
+      this._updateThemes();
+    }
   }
 
   protected render() {
@@ -121,6 +138,18 @@ class KnxFrontend extends KnxElement {
     );
     this.parentElement!.style.backgroundColor = "var(--primary-background-color)";
     this.parentElement!.style.color = "var(--primary-text-color)";
+  }
+
+  private _updateThemes() {
+    if (!this.hass?.themes) {
+      return;
+    }
+    this._themes = {
+      default_theme: this.hass.themes.default_theme,
+      default_dark_theme: this.hass.themes.default_dark_theme || undefined,
+      darkMode: this.hass.themes.darkMode,
+      themes: this.hass.themes.themes,
+    };
   }
 }
 
