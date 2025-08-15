@@ -22,6 +22,9 @@ export class DistinctCountBitsetService {
   // Map telegram ID to bit index for efficient removals
   private _idToIndex = new Map<string, number>();
 
+  // Bitset containing all telegram indices for quick "no filter" handling
+  private _allBitset = new TypedFastBitSet();
+
   // Monotonically increasing index to avoid shifting bit positions
   private _nextIndex = 0;
 
@@ -40,6 +43,7 @@ export class DistinctCountBitsetService {
       map.clear();
     }
     this._idToIndex.clear();
+    this._allBitset = new TypedFastBitSet();
     this._nextIndex = 0;
   }
 
@@ -60,6 +64,7 @@ export class DistinctCountBitsetService {
       const index = this._nextIndex++;
       this._idToIndex.set(telegram.id, index);
       this._addToBitsets(telegram, index);
+      this._allBitset.add(index);
     }
   }
 
@@ -87,6 +92,7 @@ export class DistinctCountBitsetService {
       }
 
       this._idToIndex.delete(telegram.id);
+      this._allBitset.remove(index);
     }
   }
 
@@ -130,6 +136,66 @@ export class DistinctCountBitsetService {
     }
 
     return result.size();
+  }
+
+  /**
+   * Computes a bitset representing all telegram indices that match the given filters
+   */
+  public getFilteredBitset(filters: FilterMap): TypedFastBitSet {
+    let result: TypedFastBitSet | null = null;
+
+    for (const [field, values] of Object.entries(filters) as [FilterField, ReadonlySet<string>][]) {
+      if (values.size === 0) continue;
+
+      const union = new TypedFastBitSet();
+      for (const value of values) {
+        const bs = this._bitsets.get(field)?.get(value);
+        if (bs) {
+          union.union(bs);
+        }
+      }
+
+      if (result === null) {
+        result = union;
+      } else {
+        result.intersection(union);
+      }
+
+      if (result.isEmpty()) {
+        return new TypedFastBitSet();
+      }
+    }
+
+    return result || this._allBitset.clone();
+  }
+
+  /**
+   * Gets all distinct IDs for a given field
+   */
+  public getDistinctIds(field: FilterField): string[] {
+    const fieldMap = this._bitsets.get(field);
+    return fieldMap ? Array.from(fieldMap.keys()) : [];
+  }
+
+  /**
+   * Filters the provided telegram array using the current bitset filters
+   */
+  public filterTelegrams<T extends TelegramLike>(telegrams: readonly T[], filters: FilterMap): T[] {
+    const bitset = this.getFilteredBitset(filters);
+
+    // If bitset represents all telegrams, return a shallow copy of the array
+    if (bitset.size() === this._allBitset.size()) {
+      return [...telegrams];
+    }
+
+    const result: T[] = [];
+    for (const telegram of telegrams) {
+      const index = this._idToIndex.get(telegram.id);
+      if (index !== undefined && bitset.has(index)) {
+        result.push(telegram);
+      }
+    }
+    return result;
   }
 
   private _addToBitsets(telegram: TelegramLike, index: number): void {

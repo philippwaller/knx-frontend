@@ -99,14 +99,6 @@ export class GroupMonitorController implements ReactiveController {
 
   private _connectionError: string | null = null;
 
-  // Filter data - only stores total counts, filtered counts computed on-the-fly
-  private _distinctValues: DistinctValues = {
-    source: {},
-    destination: {},
-    direction: {},
-    telegramtype: {},
-  };
-
   // Buffer version counter for memoization cache invalidation
   private _bufferVersion = 0;
 
@@ -225,7 +217,6 @@ export class GroupMonitorController implements ReactiveController {
       this._bufferVersion,
       JSON.stringify(this._filters),
       this._telegramBuffer.snapshot,
-      this._distinctValues,
       this._sortColumn,
       this._sortDirection,
     );
@@ -240,14 +231,18 @@ export class GroupMonitorController implements ReactiveController {
       _bufferVersion: number,
       _filtersJson: string,
       allTelegrams: readonly TelegramRow[],
-      distinctValues: DistinctValues,
       sortColumn?: string,
       sortDirection?: SortingDirection,
     ): FilteredTelegramsResult => {
-      // Filter telegrams based on current filters
-      const filteredTelegrams = allTelegrams.filter((telegram) =>
-        this.matchesActiveFilters(telegram),
-      );
+      const filtersMap: FilterMap = {
+        source: new Set(this._filters.source || []),
+        destination: new Set(this._filters.destination || []),
+        direction: new Set(this._filters.direction || []),
+        telegramtype: new Set(this._filters.telegramtype || []),
+      };
+
+      // Filter telegrams using bitset service
+      const filteredTelegrams = this._bitsetService.filterTelegrams(allTelegrams, filtersMap);
 
       // Sort telegrams if a sort column and direction are specified
       if (sortColumn && sortDirection) {
@@ -313,13 +308,6 @@ export class GroupMonitorController implements ReactiveController {
         }
       }
 
-      const filtersMap: FilterMap = {
-        source: new Set(this._filters.source || []),
-        destination: new Set(this._filters.destination || []),
-        direction: new Set(this._filters.direction || []),
-        telegramtype: new Set(this._filters.telegramtype || []),
-      };
-
       const distinctValuesWithFilteredCounts: DistinctValues = {
         source: {},
         destination: {},
@@ -328,13 +316,30 @@ export class GroupMonitorController implements ReactiveController {
       };
 
       for (const field of FILTER_FIELDS) {
-        for (const [id, info] of Object.entries(distinctValues[field])) {
+        // Get distinct IDs from bitset service (actual data)
+        const distinctIds = this._bitsetService.getDistinctIds(field);
+        for (const id of distinctIds) {
+          const name = this._getNameForFieldValue(field, id);
           distinctValuesWithFilteredCounts[field][id] = {
-            id: info.id,
-            name: info.name,
+            id,
+            name,
             totalCount: this._bitsetService.getDistinctCount(field, id),
             filteredCount: this._bitsetService.getDistinctCount(field, id, filtersMap),
           };
+        }
+
+        // Add selected filter values that are not in the data (with count 0)
+        const activeFilterValues = this._filters[field] || [];
+        for (const filterId of activeFilterValues) {
+          if (!distinctValuesWithFilteredCounts[field][filterId]) {
+            const name = this._getNameForFieldValue(field, filterId);
+            distinctValuesWithFilteredCounts[field][filterId] = {
+              id: filterId,
+              name,
+              totalCount: 0,
+              filteredCount: 0,
+            };
+          }
         }
       }
 
@@ -345,24 +350,6 @@ export class GroupMonitorController implements ReactiveController {
   // ============================================================================
   // Filter methods
   // ============================================================================
-
-  /**
-   * Determines if a telegram matches the currently active filters
-   */
-  public matchesActiveFilters(telegram: TelegramRow): boolean {
-    return Object.entries(this._filters).every(([field, values]) => {
-      if (!values?.length) return true;
-
-      const fieldMap: Record<string, string> = {
-        source: telegram.sourceAddress,
-        destination: telegram.destinationAddress,
-        direction: telegram.direction,
-        telegramtype: telegram.type,
-      };
-
-      return values.includes(fieldMap[field] || "");
-    });
-  }
 
   /**
    * Toggles a filter value on/off for a specific field
@@ -379,7 +366,6 @@ export class GroupMonitorController implements ReactiveController {
     }
 
     this._updateUrlFromFilters(route);
-    this._cleanupUnusedFilterValues();
 
     this.host.requestUpdate();
   }
@@ -390,7 +376,6 @@ export class GroupMonitorController implements ReactiveController {
   public setFilterFieldValue(field: string, value: string[], route?: Route): void {
     this._filters = { ...this._filters, [field]: value };
     this._updateUrlFromFilters(route);
-    this._cleanupUnusedFilterValues();
 
     this.host.requestUpdate();
   }
@@ -401,7 +386,6 @@ export class GroupMonitorController implements ReactiveController {
   public clearFilters(route?: Route): void {
     this._filters = {};
     this._updateUrlFromFilters(route);
-    this._cleanupUnusedFilterValues();
 
     this.host.requestUpdate();
   }
@@ -448,12 +432,9 @@ export class GroupMonitorController implements ReactiveController {
    * Clears all telegrams from the display and resets filter data
    */
   public clearTelegrams(): void {
-    // Create filtered distinct values to preserve selected filter names
-    const preserveValues = this._createFilteredDistinctValues();
-
     this._telegramBuffer.clear();
     this._bitsetService.clear();
-    this._resetDistinctValues(preserveValues);
+    this._bufferVersion++;
     this._isReloadEnabled = true;
     this.host.requestUpdate();
   }
@@ -505,173 +486,20 @@ export class GroupMonitorController implements ReactiveController {
   }
 
   /**
-   * Extracts field value for distinct value tracking
+   * Gets the name for a specific field value
    */
-  private _extractTelegramField(
-    telegram: TelegramRow,
-    field: FilterField,
-  ): { id: string; name: string } | null {
+  private _getNameForFieldValue(field: FilterField, id: string): string {
     switch (field) {
       case "source":
-        return {
-          id: telegram.sourceAddress,
-          name: this._nameService.getIndividualAddressName(telegram.sourceAddress),
-        };
+        return this._nameService.getIndividualAddressName(id);
       case "destination":
-        return {
-          id: telegram.destinationAddress,
-          name: this._nameService.getGroupAddressName(telegram.destinationAddress),
-        };
+        return this._nameService.getGroupAddressName(id);
       case "direction":
-        return { id: telegram.direction, name: "" };
       case "telegramtype":
-        return { id: telegram.type, name: "" };
+        return "";
       default:
-        return null;
+        return "";
     }
-  }
-
-  /**
-   * Adds a telegram to distinct values tracking (names only, counts handled by bitset service)
-   */
-  private _addToDistinctValues(telegram: TelegramRow): void {
-    for (const field of FILTER_FIELDS) {
-      const extracted = this._extractTelegramField(telegram, field);
-      if (!extracted) {
-        logger.warn(`Unknown field for distinct values: ${field}`);
-        continue;
-      }
-
-      const { id, name } = extracted;
-      const existing = this._distinctValues[field][id];
-      if (!existing) {
-        this._distinctValues[field][id] = {
-          id,
-          name,
-          totalCount: 0, // Will be calculated by bitset service
-        };
-      }
-    }
-
-    // Increment buffer version to invalidate memoization cache
-    this._bufferVersion++;
-  }
-
-  /**
-   * Removes telegrams from distinct values tracking (cleanup of unused entries)
-   */
-  private _removeFromDistinctValues(telegrams: TelegramRow[]): void {
-    if (telegrams.length === 0) return;
-
-    // After removing telegrams from bitset, check if any distinct values are no longer present
-    for (const field of FILTER_FIELDS) {
-      const fieldValues = this._distinctValues[field];
-      const idsToRemove: string[] = [];
-
-      for (const [id] of Object.entries(fieldValues)) {
-        // Check if this value still exists in the bitset service
-        if (this._bitsetService.getDistinctCount(field, id) === 0) {
-          // Only remove if it's not in active filters (preserve filter names)
-          const activeFilterValues = this._filters[field] || [];
-          if (!activeFilterValues.includes(id)) {
-            idsToRemove.push(id);
-          }
-        }
-      }
-
-      // Remove the unused entries
-      for (const id of idsToRemove) {
-        delete this._distinctValues[field][id];
-      }
-    }
-
-    // Increment buffer version to invalidate memoization cache
-    this._bufferVersion++;
-  }
-
-  /**
-   * Creates a TelegramDistinctValues object with selected filter values and their names
-   * All counts are initialized to 0
-   */
-  private _createFilteredDistinctValues(): DistinctValues {
-    const result: DistinctValues = {
-      source: {},
-      destination: {},
-      direction: {},
-      telegramtype: {},
-    };
-
-    for (const field of FILTER_FIELDS) {
-      const filterValues = this._filters[field];
-      if (!filterValues?.length) continue;
-
-      for (const value of filterValues) {
-        const existingInfo = this._distinctValues[field][value];
-        result[field][value] = {
-          id: value,
-          name: existingInfo?.name || "",
-          totalCount: 0,
-        };
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Removes distinct values with no telegrams that are no longer in active filters
-   * This cleans up filter values that were preserved but are no longer selected
-   */
-  private _cleanupUnusedFilterValues(): void {
-    let hasChanges = false;
-
-    for (const field of FILTER_FIELDS) {
-      const activeFilterValues = this._filters[field] || [];
-      const fieldValues = this._distinctValues[field];
-
-      for (const [value] of Object.entries(fieldValues)) {
-        // Remove if no telegrams exist and value is not in active filters
-        if (
-          this._bitsetService.getDistinctCount(field, value) === 0 &&
-          !activeFilterValues.includes(value)
-        ) {
-          delete this._distinctValues[field][value];
-          hasChanges = true;
-        }
-      }
-    }
-
-    // Increment buffer version if we made changes
-    if (hasChanges) {
-      this._bufferVersion++;
-    }
-  }
-
-  /**
-   * Resets all distinct values
-   * @param preserveValues - Optional DistinctValues to preserve with their names
-   */
-  private _resetDistinctValues(preserveValues?: DistinctValues): void {
-    if (preserveValues) {
-      // Start with the preserved values
-      this._distinctValues = {
-        source: { ...preserveValues.source },
-        destination: { ...preserveValues.destination },
-        direction: { ...preserveValues.direction },
-        telegramtype: { ...preserveValues.telegramtype },
-      };
-    } else {
-      // Reset to empty
-      this._distinctValues = {
-        source: {},
-        destination: {},
-        direction: {},
-        telegramtype: {},
-      };
-    }
-
-    // Increment buffer version to invalidate memoization cache
-    this._bufferVersion++;
   }
 
   // ============================================================================
@@ -713,10 +541,10 @@ export class GroupMonitorController implements ReactiveController {
       if (this._telegramBuffer.maxSize !== telegramStorageLimit) {
         const removedTelegrams = this._telegramBuffer.setMaxSize(telegramStorageLimit);
 
-        // Update distinct values by removing counts for removed telegrams
+        // Remove telegrams from bitset service
         if (removedTelegrams.length > 0) {
-          this._removeFromDistinctValues(removedTelegrams);
           this._bitsetService.remove(removedTelegrams);
+          this._bufferVersion++;
         }
       }
 
@@ -724,18 +552,15 @@ export class GroupMonitorController implements ReactiveController {
       const newTelegramRows = info.recent_telegrams.map((t) => new TelegramRow(t));
       const { added, removed } = this._telegramBuffer.merge(newTelegramRows);
 
-      // Update distinct values incrementally
+      // Update bitset service incrementally
       if (removed.length > 0) {
-        this._removeFromDistinctValues(removed);
         this._bitsetService.remove(removed);
+        this._bufferVersion++;
       }
 
       if (added.length > 0) {
-        // Add new telegrams to distinct values incrementally
-        for (const telegram of added) {
-          this._addToDistinctValues(telegram);
-        }
         this._bitsetService.add(added);
+        this._bufferVersion++;
       }
 
       if (this._connectionError !== null) {
@@ -766,13 +591,12 @@ export class GroupMonitorController implements ReactiveController {
     if (!this._isPaused) {
       const removedTelegrams = this._telegramBuffer.add(telegramRow);
       if (removedTelegrams.length > 0) {
-        this._removeFromDistinctValues(removedTelegrams);
         this._bitsetService.remove(removedTelegrams);
+        this._bufferVersion++;
       }
 
-      // Add new telegram to distinct values
-      this._addToDistinctValues(telegramRow);
       this._bitsetService.add(telegramRow);
+      this._bufferVersion++;
 
       this.host.requestUpdate();
     } else if (!this._isReloadEnabled) {
@@ -825,9 +649,6 @@ export class GroupMonitorController implements ReactiveController {
       direction: direction ? direction.split(",") : [],
       telegramtype: telegramtype ? telegramtype.split(",") : [],
     };
-
-    const preserveValues = this._createFilteredDistinctValues();
-    this._resetDistinctValues(preserveValues);
 
     this.host.requestUpdate();
   }
