@@ -148,11 +148,8 @@ export class DistinctCountBitsetService {
   public getDistinctCountsForField(
     field: FilterField,
     filters?: FilterMap,
-  ): Record<string, { totalCount: number; filteredCount: number; crossFilteredCount: number }> {
-    const result: Record<
-      string,
-      { totalCount: number; filteredCount: number; crossFilteredCount: number }
-    > = {};
+  ): Record<string, { crossFilteredCount: number }> {
+    const result: Record<string, { crossFilteredCount: number }> = {};
 
     const fieldMap = this._bitsets.get(field);
     if (!fieldMap) return result;
@@ -162,8 +159,6 @@ export class DistinctCountBitsetService {
       for (const [id, bitset] of fieldMap) {
         const totalCount = bitset.size();
         result[id] = {
-          totalCount,
-          filteredCount: totalCount,
           crossFilteredCount: totalCount,
         };
       }
@@ -172,30 +167,10 @@ export class DistinctCountBitsetService {
 
     // Pre-compute filter bitsets once per field
     const filtersExcludingField = this._computeFiltersExcludingField(filters, field);
-    const sameFieldValues = filters[field];
-    const hasSameFieldFilters = sameFieldValues && sameFieldValues.size > 0;
 
     // Process all IDs in the field
     for (const [id, baseBitset] of fieldMap) {
       const totalCount = baseBitset.size();
-
-      // Calculate filtered count (including same-field filters)
-      let filteredCount = 0;
-      if (hasSameFieldFilters && !sameFieldValues.has(id)) {
-        // Same field has filters and this value is not included
-        filteredCount = 0;
-      } else if (filtersExcludingField === null) {
-        // No other field filters exist
-        filteredCount = totalCount;
-      } else if (filtersExcludingField.isEmpty()) {
-        // Other field filters result in empty set
-        filteredCount = 0;
-      } else {
-        // Intersect with other field filters
-        const tempResult = baseBitset.clone();
-        tempResult.intersection(filtersExcludingField);
-        filteredCount = tempResult.size();
-      }
 
       // Calculate cross-filtered count (ignoring same-field filters)
       let crossFilteredCount = 0;
@@ -213,8 +188,6 @@ export class DistinctCountBitsetService {
       }
 
       result[id] = {
-        totalCount,
-        filteredCount,
         crossFilteredCount,
       };
     }

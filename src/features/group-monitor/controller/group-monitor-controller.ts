@@ -34,8 +34,6 @@ export type FilterMap = Record<FilterField, ReadonlySet<string>>;
 export interface DistinctValueInfo {
   id: string;
   name: string;
-  totalCount: number;
-  filteredCount?: number;
   crossFilteredCount?: number;
 }
 
@@ -326,8 +324,6 @@ export class GroupMonitorController implements ReactiveController {
           distinctValuesWithFilteredCounts[field][id] = {
             id,
             name,
-            totalCount: counts.totalCount,
-            filteredCount: counts.filteredCount,
             crossFilteredCount: counts.crossFilteredCount,
           };
         }
@@ -340,8 +336,6 @@ export class GroupMonitorController implements ReactiveController {
             distinctValuesWithFilteredCounts[field][filterId] = {
               id: filterId,
               name,
-              totalCount: 0,
-              filteredCount: 0,
               crossFilteredCount: 0,
             };
           }
