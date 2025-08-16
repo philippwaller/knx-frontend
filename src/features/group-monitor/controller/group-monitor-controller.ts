@@ -317,20 +317,18 @@ export class GroupMonitorController implements ReactiveController {
       };
 
       for (const field of FILTER_FIELDS) {
-        // Get distinct IDs from bitset service (actual data)
-        const distinctIds = this._bitsetService.getDistinctIds(field);
-        for (const id of distinctIds) {
+        // Use optimized batch processing to get all counts for this field at once
+        const fieldCounts = this._bitsetService.getDistinctCountsForField(field, filtersMap);
+
+        // Convert to the expected format with names
+        for (const [id, counts] of Object.entries(fieldCounts)) {
           const name = this._getNameForFieldValue(field, id);
           distinctValuesWithFilteredCounts[field][id] = {
             id,
             name,
-            totalCount: this._bitsetService.getDistinctCount(field, id),
-            filteredCount: this._bitsetService.getDistinctCount(field, id, filtersMap),
-            crossFilteredCount: this._bitsetService.getDistinctCountIgnoringSelf(
-              field,
-              id,
-              filtersMap,
-            ),
+            totalCount: counts.totalCount,
+            filteredCount: counts.filteredCount,
+            crossFilteredCount: counts.crossFilteredCount,
           };
         }
 

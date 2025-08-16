@@ -104,6 +104,125 @@ export class DistinctCountBitsetService {
   }
 
   /**
+   * Pre-computes filter bitsets for all fields excluding a specific field
+   * Returns a map where each key is a field name and the value is the union of all filters for other fields
+   */
+  private _computeFiltersExcludingField(
+    filters: FilterMap,
+    excludeField: FilterField,
+  ): TypedFastBitSet | null {
+    let result: TypedFastBitSet | null = null;
+
+    for (const [f, values] of Object.entries(filters) as [FilterField, ReadonlySet<string>][]) {
+      // Skip the excluded field
+      if (f === excludeField) continue;
+
+      if (values.size === 0) continue;
+
+      const union = new TypedFastBitSet();
+      for (const v of values) {
+        const bs = this._bitsets.get(f)?.get(v);
+        if (bs) {
+          union.union(bs);
+        }
+      }
+
+      if (result === null) {
+        result = union;
+      } else {
+        result.intersection(union);
+      }
+
+      if (result.isEmpty()) {
+        return new TypedFastBitSet(); // Return empty bitset for short-circuit
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Efficiently computes distinct counts for all values in a field with filtering
+   * This is optimized for batch processing by pre-computing filter bitsets once per field
+   */
+  public getDistinctCountsForField(
+    field: FilterField,
+    filters?: FilterMap,
+  ): Record<string, { totalCount: number; filteredCount: number; crossFilteredCount: number }> {
+    const result: Record<
+      string,
+      { totalCount: number; filteredCount: number; crossFilteredCount: number }
+    > = {};
+
+    const fieldMap = this._bitsets.get(field);
+    if (!fieldMap) return result;
+
+    // If no filters, all counts are the same as total counts
+    if (!filters) {
+      for (const [id, bitset] of fieldMap) {
+        const totalCount = bitset.size();
+        result[id] = {
+          totalCount,
+          filteredCount: totalCount,
+          crossFilteredCount: totalCount,
+        };
+      }
+      return result;
+    }
+
+    // Pre-compute filter bitsets once per field
+    const filtersExcludingField = this._computeFiltersExcludingField(filters, field);
+    const sameFieldValues = filters[field];
+    const hasSameFieldFilters = sameFieldValues && sameFieldValues.size > 0;
+
+    // Process all IDs in the field
+    for (const [id, baseBitset] of fieldMap) {
+      const totalCount = baseBitset.size();
+
+      // Calculate filtered count (including same-field filters)
+      let filteredCount = 0;
+      if (hasSameFieldFilters && !sameFieldValues.has(id)) {
+        // Same field has filters and this value is not included
+        filteredCount = 0;
+      } else if (filtersExcludingField === null) {
+        // No other field filters exist
+        filteredCount = totalCount;
+      } else if (filtersExcludingField.isEmpty()) {
+        // Other field filters result in empty set
+        filteredCount = 0;
+      } else {
+        // Intersect with other field filters
+        const tempResult = baseBitset.clone();
+        tempResult.intersection(filtersExcludingField);
+        filteredCount = tempResult.size();
+      }
+
+      // Calculate cross-filtered count (ignoring same-field filters)
+      let crossFilteredCount = 0;
+      if (filtersExcludingField === null) {
+        // No other field filters exist
+        crossFilteredCount = totalCount;
+      } else if (filtersExcludingField.isEmpty()) {
+        // Other field filters result in empty set
+        crossFilteredCount = 0;
+      } else {
+        // Intersect with other field filters
+        const tempResult = baseBitset.clone();
+        tempResult.intersection(filtersExcludingField);
+        crossFilteredCount = tempResult.size();
+      }
+
+      result[id] = {
+        totalCount,
+        filteredCount,
+        crossFilteredCount,
+      };
+    }
+
+    return result;
+  }
+
+  /**
    * Gets the distinct count for a field/value combination under the given filters
    * If no filters are provided, returns the total count for the field/value combination
    */
@@ -116,32 +235,28 @@ export class DistinctCountBitsetService {
       return base.size();
     }
 
-    const result = base.clone();
-
-    for (const [f, values] of Object.entries(filters) as [FilterField, ReadonlySet<string>][]) {
-      // If same field has filters and does not include the value, result is 0
-      if (f === field) {
-        if (values.size > 0 && !values.has(value)) {
-          return 0;
-        }
-        continue;
-      }
-
-      if (values.size === 0) continue;
-
-      const union = new TypedFastBitSet();
-      for (const v of values) {
-        const bs = this._bitsets.get(f)?.get(v);
-        if (bs) {
-          union.union(bs);
-        }
-      }
-      result.intersection(union);
-      if (result.isEmpty()) {
-        return 0;
-      }
+    // Check if same field has filters and does not include the value
+    const sameFieldValues = filters[field];
+    if (sameFieldValues && sameFieldValues.size > 0 && !sameFieldValues.has(value)) {
+      return 0;
     }
 
+    // Compute filters excluding this field once
+    const filtersExcludingField = this._computeFiltersExcludingField(filters, field);
+
+    // If no other field filters exist, return base size
+    if (filtersExcludingField === null) {
+      return base.size();
+    }
+
+    // If other field filters result in empty set, return 0
+    if (filtersExcludingField.isEmpty()) {
+      return 0;
+    }
+
+    // Intersect base with the pre-computed filter bitset
+    const result = base.clone();
+    result.intersection(filtersExcludingField);
     return result.size();
   }
 
@@ -160,23 +275,22 @@ export class DistinctCountBitsetService {
 
     if (!filters) return base.size();
 
-    const result = base.clone();
+    // Compute filters excluding this field once (ignoring same-field filters entirely)
+    const filtersExcludingField = this._computeFiltersExcludingField(filters, field);
 
-    for (const [f, values] of Object.entries(filters) as [FilterField, ReadonlySet<string>][]) {
-      // Ignore same-field filters entirely
-      if (f === field) continue;
-
-      if (values.size === 0) continue;
-
-      const union = new TypedFastBitSet();
-      for (const v of values) {
-        const bs = this._bitsets.get(f)?.get(v);
-        if (bs) union.union(bs);
-      }
-      result.intersection(union);
-      if (result.isEmpty()) return 0;
+    // If no other field filters exist, return base size
+    if (filtersExcludingField === null) {
+      return base.size();
     }
 
+    // If other field filters result in empty set, return 0
+    if (filtersExcludingField.isEmpty()) {
+      return 0;
+    }
+
+    // Intersect base with the pre-computed filter bitset
+    const result = base.clone();
+    result.intersection(filtersExcludingField);
     return result.size();
   }
 
