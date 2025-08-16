@@ -71,4 +71,38 @@ describe("DistinctCountBitsetService", () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("3");
   });
+
+  it("computes cross-filtered counts ignoring self-field filters", () => {
+    const t1 = createTelegram("1", { sourceAddress: "1.2.1", direction: "Outgoing" });
+    const t2 = createTelegram("2", { sourceAddress: "1.2.2", direction: "Outgoing" });
+    const t3 = createTelegram("3", { sourceAddress: "1.2.1", direction: "Incoming" });
+
+    service.add([t1, t2, t3]);
+
+    // Case A: Only same-field filter (source) set to a different value
+    const fA: FilterMap = {
+      source: new Set(["1.2.2"]),
+      destination: new Set(),
+      direction: new Set(),
+      telegramtype: new Set(),
+    };
+
+    // Standard semantics: self-filter excludes other values
+    expect(service.getDistinctCount("source", "1.2.1", fA)).toBe(0);
+    // Ignoring self-filter: returns total for that value (no other filters)
+    expect(service.getDistinctCountIgnoringSelf("source", "1.2.1", fA)).toBe(2);
+
+    // Case B: Same-field filter plus another field filter
+    const fB: FilterMap = {
+      source: new Set(["1.2.2"]),
+      destination: new Set(),
+      direction: new Set(["Outgoing"]),
+      telegramtype: new Set(),
+    };
+
+    // Standard semantics still zero
+    expect(service.getDistinctCount("source", "1.2.1", fB)).toBe(0);
+    // Ignoring self-filter: intersect with direction=Outgoing only => only t1 matches
+    expect(service.getDistinctCountIgnoringSelf("source", "1.2.1", fB)).toBe(1);
+  });
 });

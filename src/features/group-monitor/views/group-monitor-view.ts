@@ -180,28 +180,10 @@ export class KNXGroupMonitor extends LitElement {
   // ============================================================================
 
   /**
-   * Checks if any filters are currently active
-   * @param filterField - Optional specific filter field to check (e.g., 'source', 'destination', 'direction', 'telegramtype')
-   * @returns True if filters are active (either any filter or the specified filter field)
-   */
-  private _hasActiveFilters(filterField?: string): boolean {
-    if (filterField) {
-      const filter = this.controller.filters[filterField];
-      return Array.isArray(filter) && filter.length > 0;
-    }
-    return Object.values(this.controller.filters).some((f) => Array.isArray(f) && f.length > 0);
-  }
-
-  /**
    * Memoized configuration for source address filter
    */
   private _sourceFilterConfig = memoize(
-    (
-      hasActiveFilters: boolean,
-      sourceFiltersLength: number,
-      sourceFilterSortCriterion: string | undefined,
-      _language: string,
-    ): ListFilterConfig<DistinctValueInfo> => ({
+    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
       idField: {
         filterable: false,
         sortable: false,
@@ -228,30 +210,9 @@ export class KNXGroupMonitor extends LitElement {
       badgeField: {
         fieldName: this.knx.localize("telegram_filter_source_sort_by_badge"),
         filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) =>
-          hasActiveFilters ? `${item.filteredCount}/${item.totalCount}` : `${item.totalCount}`,
-      },
-      custom: {
-        totalCount: {
-          fieldName: this.knx.localize("telegram_filter_sort_by_total_count"),
-          filterable: false,
-          sortable: true,
-          sortAscendingText: this.knx.localize("telegram_filter_sort_ascending"),
-          sortDescendingText: this.knx.localize("telegram_filter_sort_descending"),
-          sortDefaultDirection: "desc",
-          mapper: (item: DistinctValueInfo) => item.totalCount.toString(),
-        },
-        filteredCount: {
-          fieldName: this.knx.localize("telegram_filter_sort_by_filtered_count"),
-          filterable: false,
-          sortable: sourceFiltersLength > 0 || sourceFilterSortCriterion === "filteredCount",
-          sortDisabled: sourceFiltersLength === 0,
-          sortAscendingText: this.knx.localize("telegram_filter_sort_ascending"),
-          sortDescendingText: this.knx.localize("telegram_filter_sort_descending"),
-          sortDefaultDirection: "desc",
-          mapper: (item: DistinctValueInfo) => (item.filteredCount || 0).toString(),
-        },
+        sortable: true,
+        sortDefaultDirection: "desc",
+        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
       },
     }),
   );
@@ -260,12 +221,7 @@ export class KNXGroupMonitor extends LitElement {
    * Memoized configuration for destination address filter
    */
   private _destinationFilterConfig = memoize(
-    (
-      hasActiveFilters: boolean,
-      destinationFiltersLength: number,
-      destinationFilterSortCriterion: string | undefined,
-      _language: string,
-    ): ListFilterConfig<DistinctValueInfo> => ({
+    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
       idField: {
         filterable: false,
         sortable: false,
@@ -292,32 +248,9 @@ export class KNXGroupMonitor extends LitElement {
       badgeField: {
         fieldName: this.knx.localize("telegram_filter_destination_sort_by_badge"),
         filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) =>
-          hasActiveFilters ? `${item.filteredCount}/${item.totalCount}` : `${item.totalCount}`,
-      },
-      custom: {
-        totalCount: {
-          fieldName: this.knx.localize("telegram_filter_sort_by_total_count"),
-          filterable: false,
-          sortable: true,
-          sortAscendingText: this.knx.localize("telegram_filter_sort_ascending"),
-          sortDescendingText: this.knx.localize("telegram_filter_sort_descending"),
-          sortDefaultDirection: "desc",
-          mapper: (item: DistinctValueInfo) => item.totalCount.toString(),
-          // Removed custom comparator - using new unified lazy system
-        },
-        filteredCount: {
-          fieldName: this.knx.localize("telegram_filter_sort_by_filtered_count"),
-          filterable: false,
-          sortable:
-            destinationFiltersLength > 0 || destinationFilterSortCriterion === "filteredCount",
-          sortDisabled: destinationFiltersLength === 0,
-          sortAscendingText: this.knx.localize("telegram_filter_sort_ascending"),
-          sortDescendingText: this.knx.localize("telegram_filter_sort_descending"),
-          sortDefaultDirection: "desc",
-          mapper: (item: DistinctValueInfo) => (item.filteredCount || 0).toString(),
-        },
+        sortable: true,
+        sortDefaultDirection: "desc",
+        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
       },
     }),
   );
@@ -326,7 +259,7 @@ export class KNXGroupMonitor extends LitElement {
    * Memoized configuration for direction filter (Incoming/Outgoing)
    */
   private _directionFilterConfig = memoize(
-    (hasActiveFilters: boolean, _language: string): ListFilterConfig<DistinctValueInfo> => ({
+    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
       idField: {
         filterable: false,
         sortable: false,
@@ -345,8 +278,7 @@ export class KNXGroupMonitor extends LitElement {
       badgeField: {
         filterable: false,
         sortable: false,
-        mapper: (item: DistinctValueInfo) =>
-          hasActiveFilters ? `${item.filteredCount}/${item.totalCount}` : `${item.totalCount}`,
+        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
       },
     }),
   );
@@ -355,7 +287,7 @@ export class KNXGroupMonitor extends LitElement {
    * Memoized configuration for telegram type filter
    */
   private _telegramTypeFilterConfig = memoize(
-    (hasActiveFilters: boolean, _language: string): ListFilterConfig<DistinctValueInfo> => ({
+    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
       idField: {
         filterable: false,
         sortable: false,
@@ -374,8 +306,7 @@ export class KNXGroupMonitor extends LitElement {
       badgeField: {
         filterable: false,
         sortable: false,
-        mapper: (item: DistinctValueInfo) =>
-          hasActiveFilters ? `${item.filteredCount}/${item.totalCount}` : `${item.totalCount}`,
+        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
       },
     }),
   );
@@ -990,12 +921,7 @@ export class KNXGroupMonitor extends LitElement {
           .hass=${this.hass}
           .knx=${this.knx}
           .data=${Object.values(distinctValues.source)}
-          .config=${this._sourceFilterConfig(
-            this._hasActiveFilters("source"),
-            this.controller.filters.source?.length || 0,
-            this.sourceFilter?.sortCriterion,
-            this.hass.language,
-          ) as any}
+          .config=${this._sourceFilterConfig(this.hass.language) as any}
           .selectedOptions=${this.controller.filters.source}
           .expanded=${this.controller.expandedFilter === "source"}
           .narrow=${this.narrow}
@@ -1013,12 +939,7 @@ export class KNXGroupMonitor extends LitElement {
           .hass=${this.hass}
           .knx=${this.knx}
           .data=${Object.values(distinctValues.destination)}
-          .config=${this._destinationFilterConfig(
-            this._hasActiveFilters("destination"),
-            this.controller.filters.destination?.length || 0,
-            this.destinationFilter?.sortCriterion,
-            this.hass.language,
-          ) as any}
+          .config=${this._destinationFilterConfig(this.hass.language) as any}
           .selectedOptions=${this.controller.filters.destination}
           .expanded=${this.controller.expandedFilter === "destination"}
           .narrow=${this.narrow}
@@ -1035,10 +956,7 @@ export class KNXGroupMonitor extends LitElement {
           .hass=${this.hass}
           .knx=${this.knx}
           .data=${Object.values(distinctValues.direction)}
-          .config=${this._directionFilterConfig(
-            this._hasActiveFilters("direction"),
-            this.hass.language,
-          ) as any}
+          .config=${this._directionFilterConfig(this.hass.language) as any}
           .selectedOptions=${this.controller.filters.direction}
           .pinSelectedItems=${false}
           .expanded=${this.controller.expandedFilter === "direction"}
@@ -1055,10 +973,7 @@ export class KNXGroupMonitor extends LitElement {
           .hass=${this.hass}
           .knx=${this.knx}
           .data=${Object.values(distinctValues.telegramtype)}
-          .config=${this._telegramTypeFilterConfig(
-            this._hasActiveFilters("telegramtype"),
-            this.hass.language,
-          ) as any}
+          .config=${this._telegramTypeFilterConfig(this.hass.language) as any}
           .selectedOptions=${this.controller.filters.telegramtype}
           .pinSelectedItems=${false}
           .expanded=${this.controller.expandedFilter === "telegramtype"}

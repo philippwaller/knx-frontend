@@ -146,6 +146,41 @@ export class DistinctCountBitsetService {
   }
 
   /**
+   * Gets the distinct count for a field/value combination while ignoring filters on the same field.
+   * This is useful for UI facet counts where we want to see the effect of other filters
+   * but not self-filtering on the field being enumerated.
+   */
+  public getDistinctCountIgnoringSelf(
+    field: FilterField,
+    value: string,
+    filters?: FilterMap,
+  ): number {
+    const base = this._bitsets.get(field)?.get(value);
+    if (!base) return 0;
+
+    if (!filters) return base.size();
+
+    const result = base.clone();
+
+    for (const [f, values] of Object.entries(filters) as [FilterField, ReadonlySet<string>][]) {
+      // Ignore same-field filters entirely
+      if (f === field) continue;
+
+      if (values.size === 0) continue;
+
+      const union = new TypedFastBitSet();
+      for (const v of values) {
+        const bs = this._bitsets.get(f)?.get(v);
+        if (bs) union.union(bs);
+      }
+      result.intersection(union);
+      if (result.isEmpty()) return 0;
+    }
+
+    return result.size();
+  }
+
+  /**
    * Computes a bitset representing all telegram indices that match the given filters
    */
   public getFilteredBitset(filters: FilterMap): TypedFastBitSet {

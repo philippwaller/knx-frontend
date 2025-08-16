@@ -36,6 +36,7 @@ export interface DistinctValueInfo {
   name: string;
   totalCount: number;
   filteredCount?: number;
+  crossFilteredCount?: number;
 }
 
 export type DistinctValues = Record<FilterField, Record<string, DistinctValueInfo>>;
@@ -325,6 +326,11 @@ export class GroupMonitorController implements ReactiveController {
             name,
             totalCount: this._bitsetService.getDistinctCount(field, id),
             filteredCount: this._bitsetService.getDistinctCount(field, id, filtersMap),
+            crossFilteredCount: this._bitsetService.getDistinctCountIgnoringSelf(
+              field,
+              id,
+              filtersMap,
+            ),
           };
         }
 
@@ -338,6 +344,7 @@ export class GroupMonitorController implements ReactiveController {
               name,
               totalCount: 0,
               filteredCount: 0,
+              crossFilteredCount: 0,
             };
           }
         }
