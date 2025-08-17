@@ -13,7 +13,7 @@ import { KNXLogger } from "../../../tools/knx-logger";
 import { TelegramRow, type OffsetMicros } from "../types/telegram-row";
 import type { TelegramDict } from "../../../types/websocket";
 import { extractMicrosecondsFromIso } from "../../../utils/format";
-import AddressNameService from "../services/address-name-service";
+import ProjectGraph from "../services/project-graph";
 import type { KNX } from "../../../types/knx";
 
 const logger = new KNXLogger("group_monitor_controller");
@@ -72,8 +72,8 @@ export class GroupMonitorController implements ReactiveController {
   // Bitset-based distinct count service
   private _bitsetService = new DistinctCountBitsetService();
 
-  // Name resolution service using KNX project data
-  private _nameService = new AddressNameService();
+  // Project graph encapsulating project data + lookups
+  private _projectGraph?: ProjectGraph;
 
   // KNX context for project data access
   private _knx?: KNX;
@@ -101,6 +101,11 @@ export class GroupMonitorController implements ReactiveController {
   // Buffer version counter for memoization cache invalidation
   private _bufferVersion = 0;
 
+  // Project version counter to trigger recomputation when names become available
+  private _projectVersion = 0;
+
+  private _unsubscribeProjectLoaded?: () => void;
+
   constructor(host: ReactiveControllerHost) {
     this.host = host;
     host.addController(this);
@@ -124,6 +129,10 @@ export class GroupMonitorController implements ReactiveController {
 
   hostDisconnected(): void {
     this._connectionService.disconnect();
+    if (this._unsubscribeProjectLoaded) {
+      this._unsubscribeProjectLoaded();
+      this._unsubscribeProjectLoaded = undefined;
+    }
   }
 
   // ============================================================================
@@ -137,6 +146,16 @@ export class GroupMonitorController implements ReactiveController {
     if (this._connectionService.isConnected) return;
 
     this._knx = knx;
+    this._projectGraph = new ProjectGraph(knx);
+    // When the project becomes available later, refresh to resolve names
+    this._unsubscribeProjectLoaded = this._projectGraph.onLoaded(() => {
+      this._projectVersion++;
+      this.host.requestUpdate();
+    });
+    if (this._projectGraph.isLoaded) {
+      this._projectVersion++;
+      this.host.requestUpdate();
+    }
 
     if (!(await this._loadRecentTelegrams(hass))) return;
 
@@ -208,11 +227,16 @@ export class GroupMonitorController implements ReactiveController {
     return this._connectionError;
   }
 
+  public get projectGraph(): ProjectGraph | undefined {
+    return this._projectGraph;
+  }
+
   /**
    * Gets both filtered telegrams and distinct values in a single synchronized call
    */
   public getFilteredTelegramsAndDistinctValues(): FilteredTelegramsResult {
     return this._getFilteredTelegramsAndDistinctValues(
+      this._projectVersion,
       this._bufferVersion,
       JSON.stringify(this._filters),
       this._telegramBuffer.snapshot,
@@ -227,6 +251,7 @@ export class GroupMonitorController implements ReactiveController {
    */
   private _getFilteredTelegramsAndDistinctValues = memoize(
     (
+      _projectVersion: number,
       _bufferVersion: number,
       _filtersJson: string,
       allTelegrams: readonly TelegramRow[],
@@ -490,9 +515,9 @@ export class GroupMonitorController implements ReactiveController {
   private _getNameForFieldValue(field: FilterField, id: string): string {
     switch (field) {
       case "source":
-        return this._nameService.getIndividualAddressName(id);
+        return this._projectGraph?.getIndividualAddressName(id) || "";
       case "destination":
-        return this._nameService.getGroupAddressName(id);
+        return this._projectGraph?.getGroupAddressName(id) || "";
       case "direction":
       case "telegramtype":
         return "";
@@ -521,15 +546,6 @@ export class GroupMonitorController implements ReactiveController {
     try {
       const info = await getGroupMonitorInfo(hass);
       this._isProjectLoaded = info.project_loaded;
-
-      if (info.project_loaded) {
-        if (this._knx && !this._knx.project) {
-          await this._knx.loadProject();
-        }
-        this._nameService.setProject(this._knx?.project?.knxproject ?? null);
-      } else {
-        this._nameService.setProject(null);
-      }
 
       // Calculate dynamic telegram storage limit
       const telegramsLength = info.recent_telegrams.length;

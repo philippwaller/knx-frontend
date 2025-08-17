@@ -14,6 +14,9 @@ import type {
   SortingChangedEvent,
 } from "@ha/components/data-table/ha-data-table";
 import "@ha/components/ha-icon-button";
+import "@ha/components/ha-icon-overflow-menu";
+import type { IconOverflowMenuItem } from "@ha/components/ha-icon-overflow-menu";
+import { showAlertDialog } from "@ha/dialogs/generic/show-dialog-box";
 import type { HomeAssistant, Route } from "@ha/types";
 import type { PageNavigation } from "@ha/layouts/hass-tabs-subpage";
 import { isMobileClient } from "@ha/util/is_mobile";
@@ -25,7 +28,7 @@ import "../dialogs/telegram-info-dialog";
 import "../../../components/data-table/filter/knx-list-filter";
 
 import { customElement, property, query } from "lit/decorators";
-import { mdiDeleteSweep, mdiFastForward, mdiPause, mdiRefresh } from "@mdi/js";
+import { mdiDeleteSweep, mdiFastForward, mdiPause, mdiRefresh, mdiFilterVariant } from "@mdi/js";
 import { formatTimeWithMilliseconds, formatTimeDelta } from "../../../utils/format";
 import type { TelegramRow, TelegramRowKeys } from "../types/telegram-row";
 import type { ToggleFilterEvent } from "../../../components/data-table/cell/knx-table-cell-filterable";
@@ -730,6 +733,14 @@ export class KNXGroupMonitor extends LitElement {
           `;
         },
       },
+
+      // Actions column with smart filter overflow menu
+      actions: {
+        title: "",
+        minWidth: "72px",
+        type: "overflow-menu",
+        template: (row) => this._telegramActionsMenu(row),
+      },
     }),
   );
 
@@ -759,6 +770,56 @@ export class KNXGroupMonitor extends LitElement {
 
     // Otherwise use default millisecond precision
     return formatTimeDelta(offsetMicros, "milliseconds");
+  }
+
+  /**
+   * Creates the overflow menu for telegram rows
+   */
+  private _telegramActionsMenu(row: TelegramRow): TemplateResult {
+    const items: IconOverflowMenuItem[] = [];
+
+    // Add smart filter option for destination address
+    items.push({
+      path: mdiFilterVariant,
+      label: this.knx.localize("group_monitor_menu_smart_filter"),
+      action: () => {
+        this._applySmartFilter(row.destinationAddress);
+      },
+    });
+
+    return html`
+      <ha-icon-overflow-menu .hass=${this.hass} narrow .items=${items}> </ha-icon-overflow-menu>
+    `;
+  }
+
+  /**
+   * Applies smart filter based on related group addresses
+   */
+  private _applySmartFilter(groupAddress: string): void {
+    if (!this.controller.projectGraph) {
+      showAlertDialog(this, {
+        title: this.knx.localize("group_monitor_smart_filter_title"),
+        text: this.knx.localize("group_monitor_smart_filter_no_project"),
+      });
+      return;
+    }
+
+    const relatedAddresses = this.controller.projectGraph.getRelatedGroupAddresses(groupAddress);
+
+    if (relatedAddresses.length === 0) {
+      showAlertDialog(this, {
+        title: this.knx.localize("group_monitor_smart_filter_title"),
+        text: this.knx.localize("group_monitor_smart_filter_no_relations", { address: groupAddress }),
+      });
+      return;
+    }
+
+    // Include the original address in the filter
+    const allAddresses = [groupAddress, ...relatedAddresses];
+
+    // Clear all filters and set destination filter
+    this.controller.clearFilters(this.route);
+    this.controller.setFilterFieldValue("destination", allAddresses, this.route);
   }
 
   /**
