@@ -46,6 +46,7 @@
   "group_monitor_related_addresses_title": "Related Addresses",
   "group_monitor_related_addresses_no_project": "No ETS project loaded. Upload your project on the Info tab to find related addresses.",
   "group_monitor_related_addresses_no_relations": "No related addresses found for {address}.",
+  "group_monitor_related_addresses_applied": "Filtered to {groupAddress} and related addresses ({destinationCount} destinations, {sourceCount} sources)",
   "project_title": "Project",
   "project_view_upload": "To use the project viewer please upload a KNX project on Info tab first!",
   "project_view_version_l1": "The `XKNXProject` version used for parsing the ETS project was:",

@@ -46,6 +46,7 @@
   "group_monitor_related_addresses_title": "Verwandte Adressen",
   "group_monitor_related_addresses_no_project": "Kein ETS-Projekt geladen. Lade dein Projekt im Info-Tab hoch, um verwandte Adressen zu finden.",
   "group_monitor_related_addresses_no_relations": "Keine verwandten Adressen für {address} gefunden.",
+  "group_monitor_related_addresses_applied": "Gefiltert nach {groupAddress} und verwandten Adressen ({destinationCount} Zieladressen, {sourceCount} Quelladressen)",
   "project_title": "Projekt",
   "project_view_upload": "Keine Projektdaten gefunden. Wechsle zum Info Tab und lade eine Projektdatei hoch.",
   "project_view_version_l1": "Die Version von `XKNXProject` welche für die Verarbeitung des ETS Projektes verwendet wurde, war:",

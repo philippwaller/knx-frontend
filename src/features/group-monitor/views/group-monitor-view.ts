@@ -29,6 +29,7 @@ import "../../../components/data-table/filter/knx-list-filter";
 
 import { customElement, property, query } from "lit/decorators";
 import { mdiDeleteSweep, mdiFastForward, mdiPause, mdiRefresh, mdiFilterVariant } from "@mdi/js";
+import { showToast } from "../../../utils/toast";
 import { formatTimeWithMilliseconds, formatTimeDelta } from "../../../utils/format";
 import type { TelegramRow, TelegramRowKeys } from "../types/telegram-row";
 import type { ToggleFilterEvent } from "../../../components/data-table/cell/knx-table-cell-filterable";
@@ -831,6 +832,15 @@ export class KNXGroupMonitor extends LitElement {
     if (relatedDeviceAddresses.length) {
       this.controller.setFilterFieldValue("source", relatedDeviceAddresses, this.route);
     }
+
+    // Show a toast notification that related addresses were applied
+    showToast(this, {
+      message: this.knx.localize("group_monitor_related_addresses_applied", {
+        groupAddress,
+        destinationCount: destinationAddresses.length,
+        sourceCount: relatedDeviceAddresses.length,
+      }),
+    });
   }
 
   /**
