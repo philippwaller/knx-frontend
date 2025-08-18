@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from "vitest";
 import { ProjectGraph } from "./project-graph";
 import type { KNX } from "../../../types/knx";
 import type { KNXProject } from "../../../types/websocket";
@@ -57,11 +58,11 @@ const mockProject: KNXProject = {
       project_uid: 10,
       communication_object_ids: ["co1", "co2"],
       channels: {
-        "ch1": {
+        ch1: {
           identifier: "ch1",
           name: "Channel 1",
         },
-        "ch2": {
+        ch2: {
           identifier: "ch2",
           name: "Channel 2",
         },
@@ -80,7 +81,7 @@ const mockProject: KNXProject = {
     },
   },
   communication_objects: {
-    "co1": {
+    co1: {
       name: "Switch 1",
       number: 1,
       text: "On/Off",
@@ -102,7 +103,7 @@ const mockProject: KNXProject = {
         readOnInit: false,
       },
     },
-    "co2": {
+    co2: {
       name: "Dimmer 1",
       number: 2,
       text: "Brightness",
@@ -124,7 +125,7 @@ const mockProject: KNXProject = {
         readOnInit: false,
       },
     },
-    "co3": {
+    co3: {
       name: "Kitchen Switch",
       number: 1,
       text: "On/Off",
@@ -150,6 +151,8 @@ const mockProject: KNXProject = {
 };
 
 const mockKNX: KNX = {
+  language: "en",
+  config_entry: {} as any,
   project: {
     project_loaded: true,
     knxproject: mockProject,
@@ -166,6 +169,12 @@ const mockKNX: KNX = {
     },
   },
   localize: (key: string) => key,
+  log: {
+    info: (..._args: any[]) => undefined,
+    debug: (..._args: any[]) => undefined,
+    warn: (..._args: any[]) => undefined,
+    error: (..._args: any[]) => undefined,
+  },
   loadProject: () => Promise.resolve(),
 };
 
@@ -178,42 +187,47 @@ describe("ProjectGraph", () => {
     (projectGraph as any)._project = mockProject;
   });
 
-  describe("getRelatedGroupAddresses", () => {
+  describe("getRelatedAddress", () => {
     it("should return related addresses from same channel", () => {
       // Test with 1/0/1 (channel ch1) - should find 1/0/2 (also channel ch1)
-      const related = projectGraph.getRelatedGroupAddresses("1/0/1");
-      expect(related).toEqual(["1/0/2"]);
+      const related = projectGraph.getRelatedAddress("1/0/1");
+      expect(related.groupAddresses).toEqual(["1/0/2"]);
+      expect(related.deviceAddresses).toEqual(["1.1.1"]);
     });
 
     it("should return related addresses from same channel (reverse)", () => {
       // Test with 1/0/2 (channel ch1) - should find 1/0/1 (also channel ch1)
-      const related = projectGraph.getRelatedGroupAddresses("1/0/2");
-      expect(related).toEqual(["1/0/1"]);
+      const related = projectGraph.getRelatedAddress("1/0/2");
+      expect(related.groupAddresses).toEqual(["1/0/1"]);
+      expect(related.deviceAddresses).toEqual(["1.1.1"]);
     });
 
     it("should return empty array when no related addresses found", () => {
       // Test with 1/1/1 (device has no channels) - should find no related addresses
-      const related = projectGraph.getRelatedGroupAddresses("1/1/1");
-      expect(related).toEqual([]);
+      const related = projectGraph.getRelatedAddress("1/1/1");
+      expect(related.groupAddresses).toEqual([]);
+      expect(related.deviceAddresses).toEqual(["1.1.2"]);
     });
 
     it("should return empty array for non-existent group address", () => {
-      const related = projectGraph.getRelatedGroupAddresses("9/9/9");
-      expect(related).toEqual([]);
+      const related = projectGraph.getRelatedAddress("9/9/9");
+      expect(related.groupAddresses).toEqual([]);
+      expect(related.deviceAddresses).toEqual([]);
     });
 
     it("should handle device without channels", () => {
       // Kitchen switch device has no channels, so should return all addresses from same device
-      const related = projectGraph.getRelatedGroupAddresses("1/1/1");
-      expect(related).toEqual([]);
+      const related = projectGraph.getRelatedAddress("1/1/1");
+      expect(related.groupAddresses).toEqual([]);
+      expect(related.deviceAddresses).toEqual(["1.1.2"]);
     });
   });
 
   describe("optional proactive loading", () => {
-    it("should not load proactively when disabled", () => {
+    it("should not trigger network load when disabled, but cache existing project", () => {
       const mockKNXWithProject = { ...mockKNX };
       const graph = new ProjectGraph(mockKNXWithProject, false);
-      expect(graph.isLoaded).toBe(false);
+      expect(graph.isLoaded).toBe(true);
     });
 
     it("should load proactively when enabled (default)", () => {

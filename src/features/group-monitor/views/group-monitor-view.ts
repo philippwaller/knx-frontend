@@ -734,7 +734,7 @@ export class KNXGroupMonitor extends LitElement {
         },
       },
 
-      // Actions column with smart filter overflow menu
+      // Actions column with related addresses overflow menu
       actions: {
         title: "",
         minWidth: "72px",
@@ -778,14 +778,16 @@ export class KNXGroupMonitor extends LitElement {
   private _telegramActionsMenu(row: TelegramRow): TemplateResult {
     const items: IconOverflowMenuItem[] = [];
 
-    // Add smart filter option for destination address
-    items.push({
-      path: mdiFilterVariant,
-      label: this.knx.localize("group_monitor_menu_smart_filter"),
-      action: () => {
-        this._applySmartFilter(row.destinationAddress);
-      },
-    });
+    // Add related addresses option only if a project is loaded
+    if (this.controller.isProjectLoaded) {
+      items.push({
+        path: mdiFilterVariant,
+        label: this.knx.localize("group_monitor_menu_related_addresses"),
+        action: () => {
+          this._applyRelatedAddressesFilter(row.destinationAddress);
+        },
+      });
+    }
 
     return html`
       <ha-icon-overflow-menu .hass=${this.hass} narrow .items=${items}> </ha-icon-overflow-menu>
@@ -793,33 +795,42 @@ export class KNXGroupMonitor extends LitElement {
   }
 
   /**
-   * Applies smart filter based on related group addresses
+   * Applies related addresses based filtering
    */
-  private _applySmartFilter(groupAddress: string): void {
+  private _applyRelatedAddressesFilter(groupAddress: string): void {
     if (!this.controller.projectGraph) {
       showAlertDialog(this, {
-        title: this.knx.localize("group_monitor_smart_filter_title"),
-        text: this.knx.localize("group_monitor_smart_filter_no_project"),
+        title: this.knx.localize("group_monitor_related_addresses_title"),
+        text: this.knx.localize("group_monitor_related_addresses_no_project"),
       });
       return;
     }
 
-    const relatedAddresses = this.controller.projectGraph.getRelatedGroupAddresses(groupAddress);
+    const related = this.controller.projectGraph.getRelatedAddress(groupAddress);
+    const relatedGroupAddresses = related.groupAddresses ?? [];
+    const relatedDeviceAddresses = related.deviceAddresses ?? [];
 
-    if (relatedAddresses.length === 0) {
+    if (relatedGroupAddresses.length === 0 && relatedDeviceAddresses.length === 0) {
       showAlertDialog(this, {
-        title: this.knx.localize("group_monitor_smart_filter_title"),
-        text: this.knx.localize("group_monitor_smart_filter_no_relations", { address: groupAddress }),
+        title: this.knx.localize("group_monitor_related_addresses_title"),
+        text: this.knx.localize("group_monitor_related_addresses_no_relations", {
+          address: groupAddress,
+        }),
       });
       return;
     }
 
-    // Include the original address in the filter
-    const allAddresses = [groupAddress, ...relatedAddresses];
+    // Include the original group address for destination filtering
+    const destinationAddresses = [groupAddress, ...relatedGroupAddresses];
 
-    // Clear all filters and set destination filter
+    // Clear all filters and set destination + source filters
     this.controller.clearFilters(this.route);
-    this.controller.setFilterFieldValue("destination", allAddresses, this.route);
+    if (destinationAddresses.length) {
+      this.controller.setFilterFieldValue("destination", destinationAddresses, this.route);
+    }
+    if (relatedDeviceAddresses.length) {
+      this.controller.setFilterFieldValue("source", relatedDeviceAddresses, this.route);
+    }
   }
 
   /**

@@ -28,8 +28,11 @@ export class ProjectGraph {
    */
   constructor(knx: KNX, proactivelyLoad = true) {
     this._knx = knx;
-    // Optionally proactively load if a project is configured in KNX info
-    if (proactivelyLoad && this._knx.info?.project) {
+    // If project already present in KNX, cache synchronously so isLoaded reflects immediately
+    if (this._knx.project?.knxproject) {
+      this._project = this._knx.project.knxproject;
+    } else if (proactivelyLoad && this._knx.info?.project) {
+      // Optionally proactively load if a project is configured in KNX info
       this._startLoading();
     }
   }
@@ -95,7 +98,7 @@ export class ProjectGraph {
   /** Resolve a group address name from the project data */
   public getGroupAddressName(address: string): string {
     if (!this._project && this._knx.info?.project) {
-      void this._startLoading();
+      this._startLoading();
     }
     if (!this._project) return "";
     return this._project.group_addresses[address]?.name || "";
@@ -104,7 +107,7 @@ export class ProjectGraph {
   /** Resolve an individual address name from the project data */
   public getIndividualAddressName(address: string): string {
     if (!this._project && this._knx.info?.project) {
-      void this._startLoading();
+      this._startLoading();
     }
     if (!this._project) return "";
     for (const device of Object.values(this._project.devices)) {
@@ -116,34 +119,42 @@ export class ProjectGraph {
   }
 
   /**
-   * Find related group addresses based on device channels and communication objects.
-   * If devices have channels, only return group addresses from the same channel.
-   * Otherwise, return all group addresses linked to the same devices.
+   * Find related addresses based on device channels and communication objects.
+   * Returns both related group addresses and device (individual) addresses separately.
+   * If devices have channels, only include group addresses from the same channel.
+   * Otherwise, include all group addresses linked to the same devices.
    */
-  public getRelatedGroupAddresses(groupAddress: string): string[] {
+  public getRelatedAddress(groupAddress: string): {
+    groupAddresses: string[];
+    deviceAddresses: string[];
+  } {
     if (!this._project) {
       this._logger.debug("No project loaded, cannot find related group addresses");
-      return [];
+      return { groupAddresses: [], deviceAddresses: [] };
     }
 
     const targetGA = this._project.group_addresses[groupAddress];
     if (!targetGA) {
       this._logger.debug("Group address not found in project:", groupAddress);
-      return [];
+      return { groupAddresses: [], deviceAddresses: [] };
     }
 
-    this._logger.debug("Finding related group addresses for:", groupAddress, "with", targetGA.communication_object_ids.length, "communication objects");
+    this._logger.debug(
+      "Finding related group addresses for:",
+      groupAddress,
+      "with",
+      targetGA.communication_object_ids.length,
+      "communication objects",
+    );
 
     const relatedAddresses = new Set<string>();
+    const relatedDeviceAddresses = new Set<string>();
     const processedDevices = new Set<string>();
 
     // Get all communication objects linked to the target group address
     for (const coId of targetGA.communication_object_ids) {
       const commObj = this._project.communication_objects[coId];
       if (!commObj) continue;
-
-      console.log("Processing communication object:", commObj.name, "for group address:", groupAddress);
-      console.log("Communication object details:", commObj);
 
       const deviceAddress = commObj.device_address;
       if (processedDevices.has(deviceAddress)) continue;
@@ -152,14 +163,14 @@ export class ProjectGraph {
       const device = this._project.devices[deviceAddress];
       if (!device) continue;
 
-      console.log("Device details:", device);
+      // Always include the device's individual address as related
+      if (device.individual_address) {
+        relatedDeviceAddresses.add(device.individual_address);
+      }
 
       // Check if device has channels and the communication object belongs to a specific channel
       const hasChannels = Object.keys(device.channels).length > 0;
       let targetChannel: string | null = null;
-
-      console.log("Device has channels:", hasChannels);
-      console.log("Communication object channel:", commObj.channel);
 
       if (hasChannels && commObj.channel) {
         targetChannel = commObj.channel;
@@ -178,19 +189,29 @@ export class ProjectGraph {
 
         // Add all group addresses linked to this communication object
         for (const linkedGA of deviceCommObj.group_address_links) {
-          if (linkedGA !== groupAddress) { // Don't include the original address
+          if (linkedGA !== groupAddress) {
+            // Don't include the original address
             relatedAddresses.add(linkedGA);
           }
         }
       }
     }
 
-    const result = Array.from(relatedAddresses);
-    this._logger.debug("Found", result.length, "related group addresses for", groupAddress);
-    for (const addr of result) {
-      this._logger.debug("Related address:", this.getGroupAddressName(addr));
+    const groupAddresses = Array.from(relatedAddresses);
+    const deviceAddresses = Array.from(relatedDeviceAddresses);
+    this._logger.debug(
+      "Found",
+      groupAddresses.length + deviceAddresses.length,
+      "related addresses for",
+      groupAddress,
+    );
+    for (const addr of groupAddresses) {
+      this._logger.debug("Related GA:", this.getGroupAddressName(addr));
     }
-    return result;
+    for (const addr of deviceAddresses) {
+      this._logger.debug("Related IA:", addr);
+    }
+    return { groupAddresses, deviceAddresses };
   }
 }
 
