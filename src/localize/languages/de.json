@@ -43,6 +43,7 @@
   "group_monitor_project_not_loaded_title": "Kein ETS Projekt geladen",
   "group_monitor_project_not_loaded_message": "Für zusätzliche Informationen wie Namen und Werte lade bitte dein ETS Projekt im Info-Tab hoch.",
   "group_monitor_menu_related_addresses": "Verwandte Adressen",
+  "group_monitor_menu_create_automation": "Automatisierung aus Telegramm erstellen",
   "group_monitor_related_addresses_title": "Verwandte Adressen",
   "group_monitor_related_addresses_no_project": "Kein ETS-Projekt geladen. Lade dein Projekt im Info-Tab hoch, um verwandte Adressen zu finden.",
   "group_monitor_related_addresses_no_relations": "Keine verwandten Adressen für {address} gefunden.",

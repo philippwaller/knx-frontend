@@ -7,7 +7,7 @@ import "@ha/layouts/hass-loading-screen";
 import "@ha/layouts/hass-tabs-subpage-data-table";
 import "@ha/components/ha-alert";
 import "@ha/components/ha-button";
-import type { HASSDomEvent } from "@ha/common/dom/fire_event";
+import { fireEvent, type HASSDomEvent } from "@ha/common/dom/fire_event";
 import type {
   DataTableColumnContainer,
   RowClickedEvent,
@@ -28,7 +28,16 @@ import "../dialogs/telegram-info-dialog";
 import "../../../components/data-table/filter/knx-list-filter";
 
 import { customElement, property, query } from "lit/decorators";
-import { mdiDeleteSweep, mdiFastForward, mdiPause, mdiRefresh, mdiFilterVariant } from "@mdi/js";
+import {
+  mdiDeleteSweep,
+  mdiFastForward,
+  mdiPause,
+  mdiRefresh,
+  mdiFilterVariant,
+  mdiPencilOutline,
+} from "@mdi/js";
+import type { AutomationConfig } from "@ha/data/automation";
+import { logger } from "workbox-core/_private";
 import { showToast } from "../../../utils/toast";
 import { formatTimeWithMilliseconds, formatTimeDelta } from "../../../utils/format";
 import type { TelegramRow, TelegramRowKeys } from "../types/telegram-row";
@@ -41,7 +50,6 @@ import type {
   SelectionChangedEvent as ListFilterSelectionChangedEvent,
   ExpandedChangedEvent as ListFilterExpandedChangedEvent,
   Config as ListFilterConfig,
-  KnxListFilter,
 } from "../../../components/data-table/filter/knx-list-filter";
 
 /**
@@ -790,9 +798,67 @@ export class KNXGroupMonitor extends LitElement {
       });
     }
 
+    // Add create automation option
+    items.push({
+      path: mdiPencilOutline,
+      label: this.knx.localize("group_monitor_menu_create_automation"),
+      action: () => this._createAutomationFromTelegram(row),
+    });
+
     return html`
       <ha-icon-overflow-menu .hass=${this.hass} narrow .items=${items}> </ha-icon-overflow-menu>
     `;
+  }
+
+  /**
+   * Opens the HA automation editor prefilled with a knx.telegram trigger
+   * that matches the selected telegram row context (destination, type, direction).
+   */
+  private _createAutomationFromTelegram(row: TelegramRow): void {
+    // Map telegram type to boolean filters: keep matching type default true, disable others
+    const typeFilters: Record<
+      string,
+      Partial<Record<"group_value_write" | "group_value_read" | "group_value_response", boolean>>
+    > = {
+      GroupValueWrite: { group_value_read: false, group_value_response: false },
+      GroupValueRead: { group_value_write: false, group_value_response: false },
+      GroupValueResponse: { group_value_write: false, group_value_read: false },
+    };
+
+    const directionFilter =
+      row.direction === "Incoming" ? { outgoing: false } : { incoming: false };
+
+    const newAutomation: Partial<AutomationConfig> = {
+      alias: `KNX ${row.type} ${row.destinationAddress}`,
+      description: `${this.knx.localize("group_monitor_telegram")}: ${row.sourceAddress} ${row.sourceText ? this.controller.projectGraph?.getIndividualAddressName(row.sourceAddress) : ``} → ${row.destinationAddress} ${row.destinationText ? ` - ${this.controller.projectGraph?.getGroupAddressName(row.destinationAddress)}` : ``}}`,
+      mode: "single",
+      triggers: [
+        {
+          alias: `KNX ${row.type} ${row.destinationAddress}${row.destinationName ? ` - ${row.destinationText}` : ``}`,
+          trigger: "knx.telegram",
+          destination: row.destinationAddress,
+          ...(typeFilters[row.type] || {}),
+          ...directionFilter,
+        } as any,
+      ],
+      conditions: [],
+      actions: [],
+    };
+
+    logger.debug("Creating automation", newAutomation);
+
+    // Use the new event-based approach to show the automation editor
+    // fireShowAutomationEditor(this, { data: newAutomation, expanded: true });
+    const parentCustomPanel = (window.parent as any)?.customPanel as HTMLElement | undefined;
+    if (parentCustomPanel) {
+      fireEvent(parentCustomPanel, "hass-automation-editor", {
+        data: newAutomation,
+        expanded: true,
+      });
+      return;
+    }
+
+    logger.error("Failed to find parent custom panel");
   }
 
   /**
