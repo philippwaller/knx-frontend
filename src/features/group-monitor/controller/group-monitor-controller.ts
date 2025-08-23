@@ -1,61 +1,53 @@
 import type { ReactiveController, ReactiveControllerHost } from "lit";
 import type { HomeAssistant, Route } from "@ha/types";
-import { navigate } from "@ha/common/navigate";
-import { mainWindow } from "@ha/common/dom/get_main_window";
-import memoize from "memoize-one";
 import type { SortingDirection } from "@ha/components/data-table/ha-data-table";
+import type { IconOverflowMenuItem } from "@ha/components/ha-icon-overflow-menu";
 
 import { getGroupMonitorInfo } from "../../../services/websocket.service";
 import { TelegramBufferService } from "../services/telegram-buffer-service";
 import { ConnectionService } from "../services/connection-service";
-import { DistinctCountBitsetService } from "../services/distinct-count-bitset-service";
+import {
+  FilterService,
+  type FilteredTelegramsResult,
+  type DistinctValueInfo,
+} from "../services/filter-service";
+import { TelegramFormatService } from "../services/telegram-format-service";
+import { TelegramNavigationService } from "../services/telegram-navigation-service";
+import { UrlSyncService } from "../services/url-sync-service";
+import { AutomationService } from "../services/automation-service";
+import { RelatedAddressService } from "../services/related-address-service";
+import { MenuService } from "../services/menu-service";
 import { KNXLogger } from "../../../tools/knx-logger";
-import { TelegramRow, type OffsetMicros } from "../types/telegram-row";
+import { TelegramRow } from "../types/telegram-row";
 import type { TelegramDict } from "../../../types/websocket";
-import { extractMicrosecondsFromIso } from "../../../utils/format";
 import ProjectGraph from "../services/project-graph";
 import type { KNX } from "../../../types/knx";
+import type { Config as ListFilterConfig } from "../../../components/data-table/filter/knx-list-filter";
 
 const logger = new KNXLogger("group_monitor_controller");
 
-// Filter and distinct values types for type safety
-export type FilterField = "source" | "destination" | "direction" | "telegramtype";
-
-// All filter fields as a constant array
-export const FILTER_FIELDS: readonly FilterField[] = [
-  "source",
-  "destination",
-  "direction",
-  "telegramtype",
-] as const;
-
-export type FilterMap = Record<FilterField, ReadonlySet<string>>;
-
-export interface DistinctValueInfo {
-  id: string;
-  name: string;
-  crossFilteredCount?: number;
-}
-
-export type DistinctValues = Record<FilterField, Record<string, DistinctValueInfo>>;
-
-/**
- * Combined result of telegram filtering and distinct values calculation
- */
-export interface FilteredTelegramsResult {
-  filteredTelegrams: TelegramRow[];
-  distinctValues: DistinctValues;
-}
+// Filter and distinct values types for type safety - re-export from filter service
+export type {
+  FilterField,
+  FilterMap,
+  DistinctValueInfo,
+  DistinctValues,
+  FilteredTelegramsResult,
+} from "../services/filter-service";
 
 /**
  * GroupMonitor ReactiveController
  *
- * Manages all business logic for the KNX Group Monitor:
- * - WebSocket telegram subscriptions
- * - Telegram data management with array buffer
- * - Filter state and URL synchronization
- * - High-performance distinct values calculation for filters
- * - Connection state management
+ * Coordinates all business logic services for the KNX Group Monitor:
+ * - WebSocket telegram subscriptions via ConnectionService
+ * - Telegram data management via TelegramBufferService
+ * - Filter state and URL synchronization via FilterService and UrlSyncService
+ * - High-performance distinct values calculation via FilterService
+ * - Formatting and UI configuration via TelegramFormatService
+ * - Navigation through telegrams via TelegramNavigationService
+ * - Automation creation via AutomationService
+ * - Related address filtering via RelatedAddressService
+ * - Menu item creation via MenuService
  */
 export class GroupMonitorController implements ReactiveController {
   /** Minimum buffer size for telegram storage beyond recent telegrams length */
@@ -63,30 +55,29 @@ export class GroupMonitorController implements ReactiveController {
 
   private host: ReactiveControllerHost;
 
-  // Connection service for WebSocket telegram subscriptions
+  // Core services
   private _connectionService = new ConnectionService();
 
-  // Telegram buffer service
   private _telegramBuffer = new TelegramBufferService(2000);
 
-  // Bitset-based distinct count service
-  private _bitsetService = new DistinctCountBitsetService();
+  private _filterService: FilterService;
+
+  private _formatService = new TelegramFormatService();
+
+  private _navigationService = new TelegramNavigationService();
+
+  private _urlSyncService = new UrlSyncService();
+
+  private _automationService = new AutomationService();
+
+  private _relatedAddressService = new RelatedAddressService();
+
+  private _menuService = new MenuService();
 
   // Project graph encapsulating project data + lookups
   private _projectGraph?: ProjectGraph;
 
-  // KNX context for project data access
-  private _knx?: KNX;
-
   // UI state
-  private _selectedTelegramId: string | null = null;
-
-  private _filters: Record<string, string[]> = {};
-
-  private _sortColumn?: string = "timestampIso";
-
-  private _sortDirection: SortingDirection = "desc";
-
   private _expandedFilter: string | null = "source";
 
   private _isReloadEnabled = false;
@@ -110,6 +101,9 @@ export class GroupMonitorController implements ReactiveController {
     this.host = host;
     host.addController(this);
 
+    // Initialize FilterService (depends on project graph, so initialized in setup)
+    this._filterService = new FilterService();
+
     // Set up connection service callbacks
     this._connectionService.onTelegram((telegram) => this._handleIncomingTelegram(telegram));
     this._connectionService.onConnectionChange((_connected, error) => {
@@ -124,7 +118,11 @@ export class GroupMonitorController implements ReactiveController {
 
   hostConnected(): void {
     // Initialize filters from URL when controller is connected
-    this._setFiltersFromUrl();
+    const urlFilters = this._urlSyncService.getFiltersFromUrl();
+    if (urlFilters && Object.keys(urlFilters).length > 0) {
+      this._filterService.setFilters(urlFilters);
+      this.host.requestUpdate();
+    }
   }
 
   hostDisconnected(): void {
@@ -145,15 +143,33 @@ export class GroupMonitorController implements ReactiveController {
   public async setup(hass: HomeAssistant, knx: KNX): Promise<void> {
     if (this._connectionService.isConnected) return;
 
-    this._knx = knx;
     this._projectGraph = new ProjectGraph(knx);
+
+    // Update all services with instances
+    this._filterService = new FilterService(this._projectGraph);
+    this._formatService.updateHass(hass);
+    this._formatService.updateKnx(knx);
+    this._automationService.updateKnx(knx);
+    this._automationService.updateProjectGraph(this._projectGraph);
+    this._relatedAddressService.updateKnx(knx);
+    this._relatedAddressService.updateProjectGraph(this._projectGraph);
+    this._menuService.updateKnx(knx);
+
+    // Re-apply URL filters after FilterService recreation
+    const urlFilters = this._urlSyncService.getFiltersFromUrl();
+    if (urlFilters && Object.keys(urlFilters).length > 0) {
+      this._filterService.setFilters(urlFilters);
+    }
+
     // When the project becomes available later, refresh to resolve names
     this._unsubscribeProjectLoaded = this._projectGraph.onLoaded(() => {
       this._projectVersion++;
+      this._menuService.updateProjectLoaded(true);
       this.host.requestUpdate();
     });
     if (this._projectGraph.isLoaded) {
       this._projectVersion++;
+      this._menuService.updateProjectLoaded(true);
       this.host.requestUpdate();
     }
 
@@ -177,33 +193,33 @@ export class GroupMonitorController implements ReactiveController {
   }
 
   public get selectedTelegramId(): string | null {
-    return this._selectedTelegramId;
+    return this._navigationService.selectedTelegramId;
   }
 
   public set selectedTelegramId(value: string | null) {
-    this._selectedTelegramId = value;
+    this._navigationService.selectedTelegramId = value;
     this.host.requestUpdate();
   }
 
   public get filters(): Record<string, string[]> {
-    return this._filters;
+    return this._filterService.filters;
   }
 
   public get sortColumn(): string | undefined {
-    return this._sortColumn;
+    return this._filterService.sortColumn;
   }
 
   public set sortColumn(value: string | undefined) {
-    this._sortColumn = value;
+    this._filterService.sortColumn = value;
     this.host.requestUpdate();
   }
 
   public get sortDirection(): SortingDirection | undefined {
-    return this._sortDirection;
+    return this._filterService.sortDirection;
   }
 
   public set sortDirection(value: SortingDirection | undefined) {
-    this._sortDirection = value || "desc";
+    this._filterService.sortDirection = value || "desc";
     this.host.requestUpdate();
   }
 
@@ -235,162 +251,23 @@ export class GroupMonitorController implements ReactiveController {
    * Gets both filtered telegrams and distinct values in a single synchronized call
    */
   public getFilteredTelegramsAndDistinctValues(): FilteredTelegramsResult {
-    return this._getFilteredTelegramsAndDistinctValues(
+    return this._filterService.getFilteredTelegramsAndDistinctValues(
       this._projectVersion,
       this._bufferVersion,
-      JSON.stringify(this._filters),
       this._telegramBuffer.snapshot,
-      this._sortColumn,
-      this._sortDirection,
     );
   }
 
-  /**
-   * Combined computation of filtered telegrams and distinct values with filtered counts
-   * Ensures both states are always synchronized and computed together
-   */
-  private _getFilteredTelegramsAndDistinctValues = memoize(
-    (
-      _projectVersion: number,
-      _bufferVersion: number,
-      _filtersJson: string,
-      allTelegrams: readonly TelegramRow[],
-      sortColumn?: string,
-      sortDirection?: SortingDirection,
-    ): FilteredTelegramsResult => {
-      const filtersMap: FilterMap = {
-        source: new Set(this._filters.source || []),
-        destination: new Set(this._filters.destination || []),
-        direction: new Set(this._filters.direction || []),
-        telegramtype: new Set(this._filters.telegramtype || []),
-      };
-
-      // Filter telegrams using bitset service
-      const filteredTelegrams = this._bitsetService.filterTelegrams(allTelegrams, filtersMap);
-
-      // Sort telegrams if a sort column and direction are specified
-      if (sortColumn && sortDirection) {
-        filteredTelegrams.sort((a, b) => {
-          let aValue: any;
-          let bValue: any;
-
-          switch (sortColumn) {
-            case "timestampIso":
-              // Sort by ISO timestamp string directly to preserve microsecond precision
-              aValue = a.timestampIso;
-              bValue = b.timestampIso;
-              break;
-            case "sourceAddress":
-              aValue = a.sourceAddress;
-              bValue = b.sourceAddress;
-              break;
-            case "destinationAddress":
-              aValue = a.destinationAddress;
-              bValue = b.destinationAddress;
-              break;
-            case "sourceText":
-              aValue = a.sourceText || "";
-              bValue = b.sourceText || "";
-              break;
-            case "destinationText":
-              aValue = a.destinationText || "";
-              bValue = b.destinationText || "";
-              break;
-            default:
-              // For other columns, use string comparison on the property
-              aValue = (a as any)[sortColumn] || "";
-              bValue = (b as any)[sortColumn] || "";
-          }
-
-          let result: number;
-          if (typeof aValue === "string" && typeof bValue === "string") {
-            result = aValue.localeCompare(bValue);
-          } else {
-            result = aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-          }
-
-          return sortDirection === "asc" ? result : -result;
-        });
-      }
-
-      // Calculate relative time offsets
-      for (let i = 0; i < filteredTelegrams.length; i++) {
-        const telegram = filteredTelegrams[i];
-
-        if ((sortColumn === "timestampIso" && sortDirection) || !sortColumn) {
-          let previousTelegram: TelegramRow | null = null;
-
-          if (sortDirection === "desc" && sortColumn) {
-            previousTelegram = i < filteredTelegrams.length - 1 ? filteredTelegrams[i + 1] : null;
-          } else {
-            previousTelegram = i > 0 ? filteredTelegrams[i - 1] : null;
-          }
-
-          telegram.offset = this._calculateTelegramOffset(telegram, previousTelegram);
-        } else {
-          telegram.offset = null;
-        }
-      }
-
-      const distinctValuesWithFilteredCounts: DistinctValues = {
-        source: {},
-        destination: {},
-        direction: {},
-        telegramtype: {},
-      };
-
-      for (const field of FILTER_FIELDS) {
-        // Use optimized batch processing to get all counts for this field at once
-        const fieldCounts = this._bitsetService.getDistinctCountsForField(field, filtersMap);
-
-        // Convert to the expected format with names
-        for (const [id, counts] of Object.entries(fieldCounts)) {
-          const name = this._getNameForFieldValue(field, id);
-          distinctValuesWithFilteredCounts[field][id] = {
-            id,
-            name,
-            crossFilteredCount: counts.crossFilteredCount,
-          };
-        }
-
-        // Add selected filter values that are not in the data (with count 0)
-        const activeFilterValues = this._filters[field] || [];
-        for (const filterId of activeFilterValues) {
-          if (!distinctValuesWithFilteredCounts[field][filterId]) {
-            const name = this._getNameForFieldValue(field, filterId);
-            distinctValuesWithFilteredCounts[field][filterId] = {
-              id: filterId,
-              name,
-              crossFilteredCount: 0,
-            };
-          }
-        }
-      }
-
-      return { filteredTelegrams, distinctValues: distinctValuesWithFilteredCounts };
-    },
-  );
-
   // ============================================================================
-  // Filter methods
+  // Filter methods (delegate to FilterService)
   // ============================================================================
 
   /**
    * Toggles a filter value on/off for a specific field
    */
   public toggleFilterValue(field: string, value: string, route?: Route): void {
-    const currentFilters = this._filters[field] ?? [];
-    if (currentFilters.includes(value)) {
-      this._filters = {
-        ...this._filters,
-        [field]: currentFilters.filter((item) => item !== value),
-      };
-    } else {
-      this._filters = { ...this._filters, [field]: [...currentFilters, value] };
-    }
-
-    this._updateUrlFromFilters(route);
-
+    this._filterService.toggleFilterValue(field, value);
+    this._urlSyncService.updateUrlFromFilters(this._filterService.filters, route);
     this.host.requestUpdate();
   }
 
@@ -398,9 +275,8 @@ export class GroupMonitorController implements ReactiveController {
    * Updates filter values for a specific field
    */
   public setFilterFieldValue(field: string, value: string[], route?: Route): void {
-    this._filters = { ...this._filters, [field]: value };
-    this._updateUrlFromFilters(route);
-
+    this._filterService.setFilterFieldValue(field, value);
+    this._urlSyncService.updateUrlFromFilters(this._filterService.filters, route);
     this.host.requestUpdate();
   }
 
@@ -408,9 +284,8 @@ export class GroupMonitorController implements ReactiveController {
    * Clears all active filters
    */
   public clearFilters(route?: Route): void {
-    this._filters = {};
-    this._updateUrlFromFilters(route);
-
+    this._filterService.clearFilters();
+    this._urlSyncService.updateUrlFromFilters(this._filterService.filters, route);
     this.host.requestUpdate();
   }
 
@@ -457,72 +332,135 @@ export class GroupMonitorController implements ReactiveController {
    */
   public clearTelegrams(): void {
     this._telegramBuffer.clear();
-    this._bitsetService.clear();
+    this._filterService.clear();
     this._bufferVersion++;
     this._isReloadEnabled = true;
     this.host.requestUpdate();
   }
 
   // ============================================================================
-  // Navigation methods
+  // Navigation methods (delegate to NavigationService)
   // ============================================================================
 
   /**
-   * Navigates through the filtered telegram list
+   * Selects the next telegram in the filtered list
    */
-  public navigateTelegram(step: number, filteredRows: TelegramRow[]): void {
-    if (!this._selectedTelegramId) return;
+  public selectNextTelegram(): void {
+    const { filteredTelegrams } = this.getFilteredTelegramsAndDistinctValues();
+    const newId = this._navigationService.selectNextTelegram(filteredTelegrams);
+    if (newId) {
+      this.host.requestUpdate();
+    }
+  }
 
-    const currentIndex = filteredRows.findIndex((row) => row.id === this._selectedTelegramId);
-    const targetIndex = currentIndex + step;
-
-    if (targetIndex >= 0 && targetIndex < filteredRows.length) {
-      this._selectedTelegramId = filteredRows[targetIndex].id;
+  /**
+   * Selects the previous telegram in the filtered list
+   */
+  public selectPreviousTelegram(): void {
+    const { filteredTelegrams } = this.getFilteredTelegramsAndDistinctValues();
+    const newId = this._navigationService.selectPreviousTelegram(filteredTelegrams);
+    if (newId) {
       this.host.requestUpdate();
     }
   }
 
   // ============================================================================
-  // Distinct values management
+  // UI Configuration Methods (delegate to FormatService)
   // ============================================================================
 
   /**
-   * Calculates the relative time offset between two telegrams in microseconds
-   * @param currentTelegram - The telegram to calculate offset for
-   * @param previousTelegram - The previous telegram to calculate offset from (null for first telegram)
-   * @returns The calculated offset in microseconds (null for first telegram)
+   * Gets the localized search label showing telegram count
    */
-  private _calculateTelegramOffset(
-    currentTelegram: TelegramRow,
-    previousTelegram: TelegramRow | null,
-  ): OffsetMicros {
-    if (!previousTelegram) {
-      // First telegram gets null to indicate no previous telegram
-      return null;
-    }
-
-    const currentMicros = extractMicrosecondsFromIso(currentTelegram.timestampIso);
-    const previousMicros = extractMicrosecondsFromIso(previousTelegram.timestampIso);
-
-    // Always calculate the time difference to get positive values
-    // For both sort directions, we now pass the chronologically earlier telegram as "previous"
-    return currentMicros - previousMicros;
+  public getSearchLabel(narrow: boolean): string {
+    const { filteredTelegrams } = this.getFilteredTelegramsAndDistinctValues();
+    return this._formatService.getSearchLabel(narrow, filteredTelegrams.length);
   }
 
   /**
-   * Gets the name for a specific field value
+   * Detects if the current device is a mobile touch device
    */
-  private _getNameForFieldValue(field: FilterField, id: string): string {
-    switch (field) {
-      case "source":
-        return this._projectGraph?.getIndividualAddressName(id) || "";
-      case "destination":
-        return this._projectGraph?.getGroupAddressName(id) || "";
-      case "direction":
-      case "telegramtype":
-        return "";
-      default:
-        return "";
+  public get isMobileTouchDevice(): boolean {
+    return this._formatService.isMobileTouchDevice;
+  }
+
+  /**
+   * Gets the filter configuration for source addresses
+   */
+  public getSourceFilterConfig(): ListFilterConfig<DistinctValueInfo> {
+    return this._formatService.getSourceFilterConfig();
+  }
+
+  /**
+   * Gets the filter configuration for destination addresses
+   */
+  public getDestinationFilterConfig(): ListFilterConfig<DistinctValueInfo> {
+    return this._formatService.getDestinationFilterConfig();
+  }
+
+  /**
+   * Gets the filter configuration for direction
+   */
+  public getDirectionFilterConfig(): ListFilterConfig<DistinctValueInfo> {
+    return this._formatService.getDirectionFilterConfig();
+  }
+
+  /**
+   * Gets the filter configuration for telegram type
+   */
+  public getTelegramTypeFilterConfig(): ListFilterConfig<DistinctValueInfo> {
+    return this._formatService.getTelegramTypeFilterConfig();
+  }
+
+  /**
+   * Formats the telegram offset with appropriate precision
+   */
+  public formatOffsetWithPrecision(offsetMicros: number | null): string {
+    return this._formatService.formatOffsetWithPrecision(offsetMicros);
+  }
+
+  /**
+   * Gets column configuration data for the data table
+   */
+  public getColumnConfig(narrow: boolean, projectLoaded: boolean) {
+    return this._formatService.getColumnConfig(narrow, projectLoaded);
+  }
+
+  // ============================================================================
+  // Menu and Action Methods (delegate to various services)
+  // ============================================================================
+
+  /**
+   * Creates the overflow menu items for telegram rows
+   */
+  public getTelegramActionsMenuItems(row: TelegramRow): IconOverflowMenuItem[] {
+    return this._menuService.getTelegramActionsMenuItems(
+      row,
+      (address) => this.applyRelatedAddressesFilter(address),
+      (telegram) => this.createAutomationFromTelegram(telegram),
+    );
+  }
+
+  /**
+   * Creates an automation from a telegram's context
+   */
+  public createAutomationFromTelegram(row: TelegramRow): void {
+    this._automationService.createAutomationFromTelegram(row);
+  }
+
+  /**
+   * Applies related addresses based filtering
+   */
+  public applyRelatedAddressesFilter(groupAddress: string, route?: Route, hostElement?: any): void {
+    const result = this._relatedAddressService.getRelatedAddresses(groupAddress, hostElement);
+    if (!result) return;
+
+    // Clear all filters and set destination + source filters
+    this.clearFilters(route);
+    if (result.destinationAddresses.length) {
+      this.setFilterFieldValue("destination", result.destinationAddresses, route);
+    }
+    if (result.sourceAddresses.length) {
+      this.setFilterFieldValue("source", result.sourceAddresses, route);
     }
   }
 
@@ -556,9 +494,9 @@ export class GroupMonitorController implements ReactiveController {
       if (this._telegramBuffer.maxSize !== telegramStorageLimit) {
         const removedTelegrams = this._telegramBuffer.setMaxSize(telegramStorageLimit);
 
-        // Remove telegrams from bitset service
+        // Remove telegrams from filter service
         if (removedTelegrams.length > 0) {
-          this._bitsetService.remove(removedTelegrams);
+          this._filterService.updateTelegrams([], removedTelegrams);
           this._bufferVersion++;
         }
       }
@@ -567,14 +505,9 @@ export class GroupMonitorController implements ReactiveController {
       const newTelegramRows = info.recent_telegrams.map((t) => new TelegramRow(t));
       const { added, removed } = this._telegramBuffer.merge(newTelegramRows);
 
-      // Update bitset service incrementally
-      if (removed.length > 0) {
-        this._bitsetService.remove(removed);
-        this._bufferVersion++;
-      }
-
-      if (added.length > 0) {
-        this._bitsetService.add(added);
+      // Update filter service incrementally
+      if (removed.length > 0 || added.length > 0) {
+        this._filterService.updateTelegrams(added, removed);
         this._bufferVersion++;
       }
 
@@ -605,12 +538,7 @@ export class GroupMonitorController implements ReactiveController {
 
     if (!this._isPaused) {
       const removedTelegrams = this._telegramBuffer.add(telegramRow);
-      if (removedTelegrams.length > 0) {
-        this._bitsetService.remove(removedTelegrams);
-        this._bufferVersion++;
-      }
-
-      this._bitsetService.add(telegramRow);
+      this._filterService.updateTelegrams([telegramRow], removedTelegrams);
       this._bufferVersion++;
 
       this.host.requestUpdate();
@@ -618,53 +546,5 @@ export class GroupMonitorController implements ReactiveController {
       this._isReloadEnabled = true;
       this.host.requestUpdate();
     }
-  }
-
-  /**
-   * Updates the URL with current filter state
-   */
-  private _updateUrlFromFilters(route?: Route): void {
-    if (!route) {
-      logger.warn("Route not available, cannot update URL");
-      return;
-    }
-
-    const params = new URLSearchParams();
-
-    Object.entries(this._filters).forEach(([key, values]) => {
-      if (Array.isArray(values) && values.length > 0) {
-        params.set(key, values.join(","));
-      }
-    });
-
-    const newPath = params.toString()
-      ? `${route.prefix}${route.path}?${params.toString()}`
-      : `${route.prefix}${route.path}`;
-
-    navigate(decodeURIComponent(newPath), { replace: true });
-  }
-
-  /**
-   * Sets filters from URL query parameters
-   */
-  private _setFiltersFromUrl(): void {
-    const searchParams = new URLSearchParams(mainWindow.location.search);
-    const source = searchParams.get("source");
-    const destination = searchParams.get("destination");
-    const direction = searchParams.get("direction");
-    const telegramtype = searchParams.get("telegramtype");
-
-    if (!source && !destination && !direction && !telegramtype) {
-      return;
-    }
-
-    this._filters = {
-      source: source ? source.split(",") : [],
-      destination: destination ? destination.split(",") : [],
-      direction: direction ? direction.split(",") : [],
-      telegramtype: telegramtype ? telegramtype.split(",") : [],
-    };
-
-    this.host.requestUpdate();
   }
 }

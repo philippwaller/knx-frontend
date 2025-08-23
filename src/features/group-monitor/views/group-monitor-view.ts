@@ -7,7 +7,7 @@ import "@ha/layouts/hass-loading-screen";
 import "@ha/layouts/hass-tabs-subpage-data-table";
 import "@ha/components/ha-alert";
 import "@ha/components/ha-button";
-import { fireEvent, type HASSDomEvent } from "@ha/common/dom/fire_event";
+import type { HASSDomEvent } from "@ha/common/dom/fire_event";
 import type {
   DataTableColumnContainer,
   RowClickedEvent,
@@ -15,31 +15,17 @@ import type {
 } from "@ha/components/data-table/ha-data-table";
 import "@ha/components/ha-icon-button";
 import "@ha/components/ha-icon-overflow-menu";
-import type { IconOverflowMenuItem } from "@ha/components/ha-icon-overflow-menu";
-import { showAlertDialog } from "@ha/dialogs/generic/show-dialog-box";
 import type { HomeAssistant, Route } from "@ha/types";
 import type { PageNavigation } from "@ha/layouts/hass-tabs-subpage";
-import { isMobileClient } from "@ha/util/is_mobile";
-import { isTouch } from "@ha/util/is_touch";
 
 import "../../../components/data-table/cell/knx-table-cell";
 import "../../../components/data-table/cell/knx-table-cell-filterable";
 import "../dialogs/telegram-info-dialog";
 import "../../../components/data-table/filter/knx-list-filter";
 
-import { customElement, property, query } from "lit/decorators";
-import {
-  mdiDeleteSweep,
-  mdiFastForward,
-  mdiPause,
-  mdiRefresh,
-  mdiFilterVariant,
-  mdiPencilOutline,
-} from "@mdi/js";
-import type { AutomationConfig } from "@ha/data/automation";
-import { logger } from "workbox-core/_private";
-import { showToast } from "../../../utils/toast";
-import { formatTimeWithMilliseconds, formatTimeDelta } from "../../../utils/format";
+import { customElement, property } from "lit/decorators";
+import { mdiDeleteSweep, mdiFastForward, mdiPause, mdiRefresh } from "@mdi/js";
+import { formatTimeWithMilliseconds } from "../../../utils/format";
 import type { TelegramRow, TelegramRowKeys } from "../types/telegram-row";
 import type { ToggleFilterEvent } from "../../../components/data-table/cell/knx-table-cell-filterable";
 import { GroupMonitorController } from "../controller/group-monitor-controller";
@@ -140,20 +126,6 @@ export class KNXGroupMonitor extends LitElement {
   /** GroupMonitor controller instance */
   private controller = new GroupMonitorController(this);
 
-  /** Reference to source filter component */
-  @query('knx-list-filter[data-filter="source"]') private sourceFilter?: KnxListFilter;
-
-  /** Reference to destination filter component */
-  @query('knx-list-filter[data-filter="destination"]') private destinationFilter?: KnxListFilter;
-
-  /**
-   * Detects if the current device is a mobile touch device
-   * Used to disable quick filter buttons on mobile for better UX
-   */
-  private get isMobileTouchDevice(): boolean {
-    return isMobileClient && isTouch;
-  }
-
   /**
    * Gets both filtered telegrams and distinct values in a single call to avoid update loops
    */
@@ -173,155 +145,49 @@ export class KNXGroupMonitor extends LitElement {
     await this.controller.setup(this.hass, this.knx);
   }
 
+  // ============================================================================
+  // Computed Properties
+  // ============================================================================
+
   /**
    * Localized search label showing telegram count
    * Adapts based on narrow layout and singular/plural forms
    */
   private get searchLabel(): string {
-    if (this.narrow) {
-      return this.knx.localize("group_monitor_search_label_narrow");
-    }
-    const { filteredTelegrams } = this._getFilteredData();
-    const count = filteredTelegrams.length;
-    const key = count === 1 ? "group_monitor_search_label_singular" : "group_monitor_search_label";
-    return this.knx.localize(key, { count });
+    return this.controller.getSearchLabel(this.narrow);
   }
 
   // ============================================================================
-  // Filter Configurations
+  // Filter Configurations (now provided by controller)
   // ============================================================================
 
   /**
-   * Memoized configuration for source address filter
+   * Gets the source filter configuration from the controller
    */
-  private _sourceFilterConfig = memoize(
-    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
-      idField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => item.id,
-      },
-      primaryField: {
-        fieldName: this.knx.localize("telegram_filter_source_sort_by_primaryText"),
-        filterable: true,
-        sortable: true,
-        sortAscendingText: this.knx.localize("telegram_filter_sort_ascending"),
-        sortDescendingText: this.knx.localize("telegram_filter_sort_descending"),
-        sortDefaultDirection: "asc",
-        mapper: (item: DistinctValueInfo) => item.id,
-      },
-      secondaryField: {
-        fieldName: this.knx.localize("telegram_filter_source_sort_by_secondaryText"),
-        filterable: true,
-        sortable: true,
-        sortAscendingText: this.knx.localize("telegram_filter_sort_ascending"),
-        sortDescendingText: this.knx.localize("telegram_filter_sort_descending"),
-        sortDefaultDirection: "asc",
-        mapper: (item: DistinctValueInfo) => item.name,
-      },
-      badgeField: {
-        fieldName: this.knx.localize("telegram_filter_source_sort_by_badge"),
-        filterable: false,
-        sortable: true,
-        sortDefaultDirection: "desc",
-        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
-      },
-    }),
-  );
+  private get sourceFilterConfig(): ListFilterConfig<DistinctValueInfo> {
+    return this.controller.getSourceFilterConfig();
+  }
 
   /**
-   * Memoized configuration for destination address filter
+   * Gets the destination filter configuration from the controller
    */
-  private _destinationFilterConfig = memoize(
-    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
-      idField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => item.id,
-      },
-      primaryField: {
-        fieldName: this.knx.localize("telegram_filter_destination_sort_by_primaryText"),
-        filterable: true,
-        sortable: true,
-        sortAscendingText: this.knx.localize("telegram_filter_sort_ascending"),
-        sortDescendingText: this.knx.localize("telegram_filter_sort_descending"),
-        sortDefaultDirection: "asc",
-        mapper: (item: DistinctValueInfo) => item.id,
-      },
-      secondaryField: {
-        fieldName: this.knx.localize("telegram_filter_destination_sort_by_secondaryText"),
-        filterable: true,
-        sortable: true,
-        sortAscendingText: this.knx.localize("telegram_filter_sort_ascending"),
-        sortDescendingText: this.knx.localize("telegram_filter_sort_descending"),
-        sortDefaultDirection: "asc",
-        mapper: (item: DistinctValueInfo) => item.name,
-      },
-      badgeField: {
-        fieldName: this.knx.localize("telegram_filter_destination_sort_by_badge"),
-        filterable: false,
-        sortable: true,
-        sortDefaultDirection: "desc",
-        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
-      },
-    }),
-  );
+  private get destinationFilterConfig(): ListFilterConfig<DistinctValueInfo> {
+    return this.controller.getDestinationFilterConfig();
+  }
 
   /**
-   * Memoized configuration for direction filter (Incoming/Outgoing)
+   * Gets the direction filter configuration from the controller
    */
-  private _directionFilterConfig = memoize(
-    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
-      idField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => item.id,
-      },
-      primaryField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => item.id,
-      },
-      secondaryField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => item.name,
-      },
-      badgeField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
-      },
-    }),
-  );
+  private get directionFilterConfig(): ListFilterConfig<DistinctValueInfo> {
+    return this.controller.getDirectionFilterConfig();
+  }
 
   /**
-   * Memoized configuration for telegram type filter
+   * Gets the telegram type filter configuration from the controller
    */
-  private _telegramTypeFilterConfig = memoize(
-    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
-      idField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => item.id,
-      },
-      primaryField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => item.id,
-      },
-      secondaryField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => item.name,
-      },
-      badgeField: {
-        filterable: false,
-        sortable: false,
-        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
-      },
-    }),
-  );
+  private get telegramTypeFilterConfig(): ListFilterConfig<DistinctValueInfo> {
+    return this.controller.getTelegramTypeFilterConfig();
+  }
 
   // ============================================================================
   // Event Handlers
@@ -479,23 +345,21 @@ export class KNXGroupMonitor extends LitElement {
   };
 
   // ============================================================================
-  // Telegram Navigation
+  // Telegram Navigation (delegated to controller)
   // ============================================================================
 
   /**
    * Selects the next telegram in the filtered list
    */
   private _selectNextTelegram(): void {
-    const { filteredTelegrams } = this._getFilteredData();
-    this.controller.navigateTelegram(1, filteredTelegrams);
+    this.controller.selectNextTelegram();
   }
 
   /**
    * Selects the previous telegram in the filtered list
    */
   private _selectPreviousTelegram(): void {
-    const { filteredTelegrams } = this._getFilteredData();
-    this.controller.navigateTelegram(-1, filteredTelegrams);
+    this.controller.selectPreviousTelegram();
   }
 
   // ============================================================================
@@ -557,7 +421,7 @@ export class KNXGroupMonitor extends LitElement {
             .filterActive=${(this.controller.filters.source || []).includes(
               row.sourceAddress as string,
             )}
-            .filterDisabled=${this.isMobileTouchDevice}
+            .filterDisabled=${this.controller.isMobileTouchDevice}
             @toggle-filter=${this._handleSourceFilterToggle}
           >
             <div class="primary" slot="primary">${row.sourceAddress}</div>
@@ -606,7 +470,7 @@ export class KNXGroupMonitor extends LitElement {
             .filterActive=${(this.controller.filters.destination || []).includes(
               row.destinationAddress as string,
             )}
-            .filterDisabled=${this.isMobileTouchDevice}
+            .filterDisabled=${this.controller.isMobileTouchDevice}
             @toggle-filter=${this._handleDestinationFilterToggle}
           >
             <div class="primary" slot="primary">${row.destinationAddress}</div>
@@ -657,7 +521,7 @@ export class KNXGroupMonitor extends LitElement {
             .filterActive=${(this.controller.filters.telegramtype || []).includes(
               row.type as string,
             )}
-            .filterDisabled=${this.isMobileTouchDevice}
+            .filterDisabled=${this.controller.isMobileTouchDevice}
             @toggle-filter=${this._handleTelegramTypeFilterToggle}
           >
             <div class="primary" slot="primary" title=${row.type}>${row.type}</div>
@@ -758,155 +622,20 @@ export class KNXGroupMonitor extends LitElement {
   // ============================================================================
 
   /**
-   * Formats the telegram offset with appropriate precision.
-   * If the offset in milliseconds is exactly 0 (00:00.000),
-   * shows microsecond precision to display sub-millisecond timing.
-   * @param offsetMicros - The offset in microseconds
-   * @returns Formatted offset string
+   * Formats the telegram offset with appropriate precision using the controller
    */
   private _formatOffsetWithPrecision(offsetMicros: number | null): string {
-    if (offsetMicros === null) {
-      return formatTimeDelta(offsetMicros);
-    }
-
-    // Convert to milliseconds to check if it's exactly 0
-    const offsetMs = Math.round(offsetMicros / 1000);
-
-    // If millisecond part is 0 (e.g., 00:00.000), use microsecond precision
-    if (offsetMs === 0 && offsetMicros !== 0) {
-      return formatTimeDelta(offsetMicros, "microseconds");
-    }
-
-    // Otherwise use default millisecond precision
-    return formatTimeDelta(offsetMicros, "milliseconds");
+    return this.controller.formatOffsetWithPrecision(offsetMicros);
   }
 
   /**
-   * Creates the overflow menu for telegram rows
+   * Creates the overflow menu for telegram rows using the controller
    */
   private _telegramActionsMenu(row: TelegramRow): TemplateResult {
-    const items: IconOverflowMenuItem[] = [];
-
-    // Add related addresses option only if a project is loaded
-    if (this.controller.isProjectLoaded) {
-      items.push({
-        path: mdiFilterVariant,
-        label: this.knx.localize("group_monitor_menu_related_addresses"),
-        action: () => {
-          this._applyRelatedAddressesFilter(row.destinationAddress);
-        },
-      });
-    }
-
-    // Add create automation option
-    items.push({
-      path: mdiPencilOutline,
-      label: this.knx.localize("group_monitor_menu_create_automation"),
-      action: () => this._createAutomationFromTelegram(row),
-    });
-
+    const items = this.controller.getTelegramActionsMenuItems(row);
     return html`
       <ha-icon-overflow-menu .hass=${this.hass} narrow .items=${items}> </ha-icon-overflow-menu>
     `;
-  }
-
-  /**
-   * Opens the HA automation editor prefilled with a knx.telegram trigger
-   * that matches the selected telegram row context (destination, type, direction).
-   */
-  private _createAutomationFromTelegram(row: TelegramRow): void {
-    // Map telegram type to boolean filters: keep matching type default true, disable others
-    const typeFilters: Record<
-      string,
-      Partial<Record<"group_value_write" | "group_value_read" | "group_value_response", boolean>>
-    > = {
-      GroupValueWrite: { group_value_read: false, group_value_response: false },
-      GroupValueRead: { group_value_write: false, group_value_response: false },
-      GroupValueResponse: { group_value_write: false, group_value_read: false },
-    };
-
-    const directionFilter =
-      row.direction === "Incoming" ? { outgoing: false } : { incoming: false };
-
-    const newAutomation: Partial<AutomationConfig> = {
-      alias: `KNX ${row.type} ${row.destinationAddress}`,
-      description: `${this.knx.localize("group_monitor_telegram")}: ${row.sourceAddress} ${row.sourceText ? this.controller.projectGraph?.getIndividualAddressName(row.sourceAddress) : ``} → ${row.destinationAddress} ${row.destinationText ? ` - ${this.controller.projectGraph?.getGroupAddressName(row.destinationAddress)}` : ``}}`,
-      mode: "single",
-      triggers: [
-        {
-          alias: `KNX ${row.type} ${row.destinationAddress}${row.destinationName ? ` - ${row.destinationText}` : ``}`,
-          trigger: "knx.telegram",
-          destination: row.destinationAddress,
-          ...(typeFilters[row.type] || {}),
-          ...directionFilter,
-        } as any,
-      ],
-      conditions: [],
-      actions: [],
-    };
-
-    logger.debug("Creating automation", newAutomation);
-
-    // Use the new event-based approach to show the automation editor
-    // fireShowAutomationEditor(this, { data: newAutomation, expanded: true });
-    const parentCustomPanel = (window.parent as any)?.customPanel as HTMLElement | undefined;
-    if (parentCustomPanel) {
-      fireEvent(parentCustomPanel, "hass-automation-editor", {
-        data: newAutomation,
-        expanded: true,
-      });
-      return;
-    }
-
-    logger.error("Failed to find parent custom panel");
-  }
-
-  /**
-   * Applies related addresses based filtering
-   */
-  private _applyRelatedAddressesFilter(groupAddress: string): void {
-    if (!this.controller.projectGraph) {
-      showAlertDialog(this, {
-        title: this.knx.localize("group_monitor_related_addresses_title"),
-        text: this.knx.localize("group_monitor_related_addresses_no_project"),
-      });
-      return;
-    }
-
-    const related = this.controller.projectGraph.getRelatedAddress(groupAddress);
-    const relatedGroupAddresses = related.groupAddresses ?? [];
-    const relatedDeviceAddresses = related.deviceAddresses ?? [];
-
-    if (relatedGroupAddresses.length === 0 && relatedDeviceAddresses.length === 0) {
-      showAlertDialog(this, {
-        title: this.knx.localize("group_monitor_related_addresses_title"),
-        text: this.knx.localize("group_monitor_related_addresses_no_relations", {
-          address: groupAddress,
-        }),
-      });
-      return;
-    }
-
-    // Include the original group address for destination filtering
-    const destinationAddresses = [groupAddress, ...relatedGroupAddresses];
-
-    // Clear all filters and set destination + source filters
-    this.controller.clearFilters(this.route);
-    if (destinationAddresses.length) {
-      this.controller.setFilterFieldValue("destination", destinationAddresses, this.route);
-    }
-    if (relatedDeviceAddresses.length) {
-      this.controller.setFilterFieldValue("source", relatedDeviceAddresses, this.route);
-    }
-
-    // Show a toast notification that related addresses were applied
-    showToast(this, {
-      message: this.knx.localize("group_monitor_related_addresses_applied", {
-        groupAddress,
-        destinationCount: destinationAddresses.length,
-        sourceCount: relatedDeviceAddresses.length,
-      }),
-    });
   }
 
   /**
@@ -1069,11 +798,11 @@ export class KNXGroupMonitor extends LitElement {
           .hass=${this.hass}
           .knx=${this.knx}
           .data=${Object.values(distinctValues.source)}
-          .config=${this._sourceFilterConfig(this.hass.language) as any}
+          .config=${this.sourceFilterConfig as any}
           .selectedOptions=${this.controller.filters.source}
           .expanded=${this.controller.expandedFilter === "source"}
           .narrow=${this.narrow}
-          .isMobileDevice=${this.isMobileTouchDevice}
+          .isMobileDevice=${this.controller.isMobileTouchDevice}
           .filterTitle=${this.knx.localize("group_monitor_source")}
           @selection-changed=${this._handleSourceFilterChange}
           @expanded-changed=${this._handleSourceFilterExpanded}
@@ -1087,11 +816,11 @@ export class KNXGroupMonitor extends LitElement {
           .hass=${this.hass}
           .knx=${this.knx}
           .data=${Object.values(distinctValues.destination)}
-          .config=${this._destinationFilterConfig(this.hass.language) as any}
+          .config=${this.destinationFilterConfig as any}
           .selectedOptions=${this.controller.filters.destination}
           .expanded=${this.controller.expandedFilter === "destination"}
           .narrow=${this.narrow}
-          .isMobileDevice=${this.isMobileTouchDevice}
+          .isMobileDevice=${this.controller.isMobileTouchDevice}
           .filterTitle=${this.knx.localize("group_monitor_destination")}
           @selection-changed=${this._handleDestinationFilterChange}
           @expanded-changed=${this._handleDestinationFilterExpanded}
@@ -1104,12 +833,12 @@ export class KNXGroupMonitor extends LitElement {
           .hass=${this.hass}
           .knx=${this.knx}
           .data=${Object.values(distinctValues.direction)}
-          .config=${this._directionFilterConfig(this.hass.language) as any}
+          .config=${this.directionFilterConfig as any}
           .selectedOptions=${this.controller.filters.direction}
           .pinSelectedItems=${false}
           .expanded=${this.controller.expandedFilter === "direction"}
           .narrow=${this.narrow}
-          .isMobileDevice=${this.isMobileTouchDevice}
+          .isMobileDevice=${this.controller.isMobileTouchDevice}
           .filterTitle=${this.knx.localize("group_monitor_direction")}
           @selection-changed=${this._handleDirectionFilterChange}
           @expanded-changed=${this._handleDirectionFilterExpanded}
@@ -1121,12 +850,12 @@ export class KNXGroupMonitor extends LitElement {
           .hass=${this.hass}
           .knx=${this.knx}
           .data=${Object.values(distinctValues.telegramtype)}
-          .config=${this._telegramTypeFilterConfig(this.hass.language) as any}
+          .config=${this.telegramTypeFilterConfig as any}
           .selectedOptions=${this.controller.filters.telegramtype}
           .pinSelectedItems=${false}
           .expanded=${this.controller.expandedFilter === "telegramtype"}
           .narrow=${this.narrow}
-          .isMobileDevice=${this.isMobileTouchDevice}
+          .isMobileDevice=${this.controller.isMobileTouchDevice}
           .filterTitle=${this.knx.localize("group_monitor_type")}
           @selection-changed=${this._handleTelegramTypeFilterChange}
           @expanded-changed=${this._handleTelegramTypeFilterExpanded}
