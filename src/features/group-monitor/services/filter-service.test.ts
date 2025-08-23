@@ -11,9 +11,9 @@ vi.mock("./project-graph", () => ({
   })),
 }));
 
-// Mock DistinctCountBitsetService
-vi.mock("./distinct-count-bitset-service", () => ({
-  DistinctCountBitsetService: vi.fn().mockImplementation(() => ({
+// Mock FacetIndex
+vi.mock("./facet-index", () => ({
+  FacetIndex: vi.fn().mockImplementation(() => ({
     add: vi.fn(),
     remove: vi.fn(),
     clear: vi.fn(),
@@ -102,13 +102,13 @@ describe("FilterService", () => {
       filterService.updateTelegrams([mockTelegram], []);
 
       // Verify bitset service was called (through mock)
-      expect(filterService._bitsetService.add).toHaveBeenCalledWith([mockTelegram]);
+      expect((filterService as any)._facetIndex.add).toHaveBeenCalledWith([mockTelegram]);
     });
 
     it("should clear all telegram data", () => {
       filterService.clear();
 
-      expect(filterService._bitsetService.clear).toHaveBeenCalled();
+      expect((filterService as any)._facetIndex.clear).toHaveBeenCalled();
     });
   });
 

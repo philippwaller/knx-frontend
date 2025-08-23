@@ -1,8 +1,8 @@
 import type { SortingDirection } from "@ha/components/data-table/ha-data-table";
 import memoize from "memoize-one";
 
-import type { TelegramRow, type OffsetMicros } from "../types/telegram-row";
-import { DistinctCountBitsetService } from "./distinct-count-bitset-service";
+import type { TelegramRow, OffsetMicros } from "../types/telegram-row";
+import { FacetIndex } from "./facet-index";
 import { extractMicrosecondsFromIso } from "../../../utils/format";
 import type ProjectGraph from "./project-graph";
 
@@ -39,7 +39,7 @@ export interface FilteredTelegramsResult {
  * Service responsible for all filtering operations on telegrams
  */
 export class FilterService {
-  private _bitsetService = new DistinctCountBitsetService();
+  private _facetIndex = new FacetIndex();
 
   private _filters: Record<string, string[]> = {};
 
@@ -78,10 +78,10 @@ export class FilterService {
    */
   public updateTelegrams(added: TelegramRow[], removed: TelegramRow[]): void {
     if (removed.length > 0) {
-      this._bitsetService.remove(removed);
+      this._facetIndex.remove(removed);
     }
     if (added.length > 0) {
-      this._bitsetService.add(added);
+      this._facetIndex.add(added);
     }
   }
 
@@ -89,7 +89,7 @@ export class FilterService {
    * Clears all telegram data from the filter service
    */
   public clear(): void {
-    this._bitsetService.clear();
+    this._facetIndex.clear();
   }
 
   /**
@@ -171,7 +171,7 @@ export class FilterService {
       };
 
       // Filter telegrams using bitset service
-      const filteredTelegrams = this._bitsetService.filterTelegrams(allTelegrams, filtersMap);
+      const filteredTelegrams = this._facetIndex.filterTelegrams(allTelegrams, filtersMap);
 
       // Sort telegrams if a sort column and direction are specified
       if (sortColumn && sortDirection) {
@@ -190,7 +190,7 @@ export class FilterService {
 
       for (const field of FILTER_FIELDS) {
         // Use optimized batch processing to get all counts for this field at once
-        const fieldCounts = this._bitsetService.getDistinctCountsForField(field, filtersMap);
+        const fieldCounts = this._facetIndex.getDistinctCountsForField(field, filtersMap);
 
         // Convert to the expected format with names
         for (const [id, counts] of Object.entries(fieldCounts)) {

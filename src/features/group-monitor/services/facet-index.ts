@@ -4,7 +4,7 @@ import { TypedFastBitSet } from "typedfastbitset";
 export type FilterField = "source" | "destination" | "direction" | "telegramtype";
 export type FilterMap = Record<FilterField, ReadonlySet<string>>;
 
-// Minimal telegram representation used by the bitset service
+// Minimal telegram representation used by the index
 export interface TelegramLike {
   id: string;
   sourceAddress: string;
@@ -14,9 +14,11 @@ export interface TelegramLike {
 }
 
 /**
- * Service for calculating distinct counts using bitsets
+ * Faceted index for distinct counts and fast filtering.
+ *
+ * Implementation detail: uses bitsets internally for performance.
  */
-export class DistinctCountBitsetService {
+export class FacetIndex {
   private _bitsets = new Map<FilterField, Map<string, TypedFastBitSet>>();
 
   // Map telegram ID to bit index for efficient removals
@@ -39,7 +41,7 @@ export class DistinctCountBitsetService {
   }
 
   /**
-   * Clears all bitsets and resets internal mappings
+   * Clears all data and resets internal mappings
    */
   public clear(): void {
     for (const map of this._bitsets.values()) {
@@ -52,7 +54,7 @@ export class DistinctCountBitsetService {
   }
 
   /**
-   * Rebuilds all bitsets from the provided telegram array
+   * Rebuilds the index from the provided telegram array
    */
   public rebuild(telegrams: readonly TelegramLike[]): void {
     this.clear();
@@ -60,7 +62,7 @@ export class DistinctCountBitsetService {
   }
 
   /**
-   * Adds telegrams incrementally to the bitsets
+   * Adds telegrams incrementally to the index
    */
   public add(telegrams: TelegramLike | TelegramLike[]): void {
     const array = Array.isArray(telegrams) ? telegrams : [telegrams];
@@ -74,7 +76,7 @@ export class DistinctCountBitsetService {
   }
 
   /**
-   * Removes telegrams from the bitsets
+   * Removes telegrams from the index
    */
   public remove(telegrams: readonly TelegramLike[]): void {
     for (const telegram of telegrams) {
@@ -105,7 +107,7 @@ export class DistinctCountBitsetService {
 
   /**
    * Pre-computes filter bitsets for all fields excluding a specific field
-   * Returns a map where each key is a field name and the value is the union of all filters for other fields
+   * Returns the intersection of unions for other fields
    */
   private _computeFiltersExcludingField(
     filters: FilterMap,
@@ -142,8 +144,8 @@ export class DistinctCountBitsetService {
   }
 
   /**
-   * Efficiently computes distinct counts for all values in a field with filtering
-   * This is optimized for batch processing by pre-computing filter bitsets once per field
+   * Efficiently computes distinct counts for all values in a field with filtering.
+   * Optimized for batch processing by pre-computing filter bitsets once per field.
    */
   public getDistinctCountsForField(
     field: FilterField,
@@ -235,7 +237,7 @@ export class DistinctCountBitsetService {
 
   /**
    * Gets the distinct count for a field/value combination while ignoring filters on the same field.
-   * This is useful for UI facet counts where we want to see the effect of other filters
+   * Useful for UI facet counts where we want to see the effect of other filters,
    * but not self-filtering on the field being enumerated.
    */
   public getDistinctCountIgnoringSelf(
@@ -307,7 +309,7 @@ export class DistinctCountBitsetService {
   }
 
   /**
-   * Filters the provided telegram array using the current bitset filters
+   * Filters the provided telegram array using the current filters
    */
   public filterTelegrams<T extends TelegramLike>(telegrams: readonly T[], filters: FilterMap): T[] {
     // Early exit if no filter values are set in any field
@@ -346,4 +348,4 @@ export class DistinctCountBitsetService {
   }
 }
 
-export default DistinctCountBitsetService;
+export default FacetIndex;

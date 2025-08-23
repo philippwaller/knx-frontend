@@ -26,8 +26,8 @@ vi.mock("../services/telegram-buffer-service", () => ({
   })),
 }));
 
-vi.mock("../services/distinct-count-bitset-service", () => ({
-  DistinctCountBitsetService: vi.fn(() => ({
+vi.mock("../services/facet-index", () => ({
+  FacetIndex: vi.fn(() => ({
     filterTelegrams: vi.fn(() => []),
     getDistinctCountsForField: vi.fn(() => ({})),
     add: vi.fn(),

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { DistinctCountBitsetService, type FilterMap } from "./distinct-count-bitset-service";
+import { FacetIndex, type FilterMap } from "./facet-index";
 
 interface TelegramLike {
   id: string;
@@ -19,12 +19,12 @@ function createTelegram(id: string, overrides: Partial<TelegramLike> = {}): Tele
   };
 }
 
-describe("DistinctCountBitsetService", () => {
-  let service: DistinctCountBitsetService;
+describe("FacetIndex", () => {
+  let service: FacetIndex;
   let filters: FilterMap;
 
   beforeEach(() => {
-    service = new DistinctCountBitsetService();
+    service = new FacetIndex();
     filters = {
       source: new Set(),
       destination: new Set(),
@@ -40,7 +40,7 @@ describe("DistinctCountBitsetService", () => {
     service.add([t1, t2]);
     expect(service.getDistinctCount("source", "1.2.1", filters)).toBe(1);
 
-    filters.direction.add("Outgoing");
+    filters.direction = new Set(["Outgoing"]);
     expect(service.getDistinctCount("source", "1.2.1", filters)).toBe(1);
 
     filters.direction = new Set(["Incoming"]);
@@ -61,12 +61,12 @@ describe("DistinctCountBitsetService", () => {
 
     service.add([t1, t2, t3]);
 
-    filters.direction.add("Incoming");
+    filters.direction = new Set(["Incoming"]);
     let result = service.filterTelegrams([t1, t2, t3], filters);
     expect(result).toHaveLength(2);
     expect(result.map((t) => t.id)).toEqual(["2", "3"]);
 
-    filters.telegramtype.add("GroupValueRead");
+    filters.telegramtype = new Set(["GroupValueRead"]);
     result = service.filterTelegrams([t1, t2, t3], filters);
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("3");

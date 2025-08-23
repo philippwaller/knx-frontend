@@ -37,21 +37,10 @@ export type {
 
 /**
  * GroupMonitor ReactiveController
- *
- * Coordinates all business logic services for the KNX Group Monitor:
- * - WebSocket telegram subscriptions via ConnectionService
- * - Telegram data management via TelegramBufferService
- * - Filter state and URL synchronization via FilterService and UrlSyncService
- * - High-performance distinct values calculation via FilterService
- * - Formatting and UI configuration via TelegramFormatService
- * - Navigation through telegrams via TelegramNavigationService
- * - Automation creation via AutomationService
- * - Related address filtering via RelatedAddressService
- * - Menu item creation via MenuService
  */
 export class GroupMonitorController implements ReactiveController {
   /** Minimum buffer size for telegram storage beyond recent telegrams length */
-  private static readonly MIN_TELEGRAM_STORAGE_BUFFER = 1000;
+  private static readonly MIN_TELEGRAM_STORAGE_BUFFER = 100;
 
   private host: ReactiveControllerHost;
 
