@@ -77,20 +77,6 @@ vi.mock("../services/automation-service", () => ({
   })),
 }));
 
-vi.mock("../services/related-address-service", () => ({
-  RelatedAddressService: vi.fn().mockImplementation(() => ({
-    updateKnx: vi.fn(),
-    updateProjectGraph: vi.fn(),
-  })),
-}));
-
-vi.mock("../services/menu-service", () => ({
-  MenuService: vi.fn().mockImplementation(() => ({
-    updateKnx: vi.fn(),
-    updateProjectLoaded: vi.fn(),
-  })),
-}));
-
 vi.mock("../services/project-graph", () => ({
   default: vi.fn().mockImplementation(() => ({
     onLoaded: vi.fn().mockReturnValue(() => {

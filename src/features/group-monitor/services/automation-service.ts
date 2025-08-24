@@ -1,7 +1,7 @@
 import type { AutomationConfig } from "@ha/data/automation";
-import { fireEvent } from "@ha/common/dom/fire_event";
 
 import { KNXLogger } from "../../../tools/knx-logger";
+import { HAEvents } from "../../../utils/ha-events";
 import type { KNX } from "../../../types/knx";
 import type { TelegramRow } from "../types/telegram-row";
 import type ProjectGraph from "./project-graph";
@@ -67,16 +67,14 @@ export class AutomationService {
 
     logger.debug("Creating automation", newAutomation);
 
-    // Use the new event-based approach to show the automation editor
-    const parentCustomPanel = (window.parent as any)?.customPanel as HTMLElement | undefined;
-    if (parentCustomPanel) {
-      fireEvent(parentCustomPanel, "hass-automation-editor", {
-        data: newAutomation,
-        expanded: true,
-      });
-      return;
-    }
+    // Use the new HAEvents utility to open the automation editor
+    const success = HAEvents.openAutomationEditor({
+      data: newAutomation,
+      expanded: true,
+    });
 
-    logger.error("Failed to find parent custom panel");
+    if (!success) {
+      logger.error("Failed to open automation editor");
+    }
   }
 }

@@ -208,4 +208,73 @@ describe("GroupMonitorController", () => {
       });
     });
   });
+
+  describe("Menu Actions", () => {
+    beforeEach(async () => {
+      await controller.setup(mockHass, mockKnx);
+    });
+
+    it("should create telegram action menu items when project is loaded", () => {
+      // Mock that project is loaded
+      controller._isProjectLoaded = true;
+
+      const mockTelegram = {
+        destinationAddress: "1/2/3",
+        sourceAddress: "1.1.1",
+        direction: "Incoming",
+      } as any;
+
+      const menuItems = controller.getTelegramActionsMenuItems(mockTelegram);
+
+      expect(menuItems).toHaveLength(2);
+      expect(menuItems[0].label).toBe("group_monitor_menu_related_addresses");
+      expect(menuItems[1].label).toBe("group_monitor_menu_create_automation");
+      expect(typeof menuItems[0].action).toBe("function");
+      expect(typeof menuItems[1].action).toBe("function");
+    });
+
+    it("should create telegram action menu items without related addresses when project is not loaded", () => {
+      // Mock that project is not loaded
+      controller._isProjectLoaded = false;
+
+      const mockTelegram = {
+        destinationAddress: "1/2/3",
+        sourceAddress: "1.1.1",
+        direction: "Incoming",
+      } as any;
+
+      const menuItems = controller.getTelegramActionsMenuItems(mockTelegram);
+
+      expect(menuItems).toHaveLength(1);
+      expect(menuItems[0].label).toBe("group_monitor_menu_create_automation");
+      expect(typeof menuItems[0].action).toBe("function");
+    });
+
+    it("should pass route parameter to applyRelatedAddressesFilter when provided", () => {
+      // Mock that project is loaded
+      controller._isProjectLoaded = true;
+
+      const mockTelegram = {
+        destinationAddress: "1/2/3",
+        sourceAddress: "1.1.1",
+        direction: "Incoming",
+      } as any;
+
+      const mockRoute = {
+        prefix: "/knx",
+        path: "/group-monitor",
+      } as any;
+
+      // Spy on the applyRelatedAddressesFilter method
+      const spy = vi.spyOn(controller, "applyRelatedAddressesFilter");
+
+      const menuItems = controller.getTelegramActionsMenuItems(mockTelegram, mockRoute);
+
+      // Execute the first menu item action (related addresses filter)
+      menuItems[0].action();
+
+      // Verify that the method was called with both parameters
+      expect(spy).toHaveBeenCalledWith("1/2/3", mockRoute);
+    });
+  });
 });

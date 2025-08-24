@@ -45,7 +45,7 @@
   "group_monitor_menu_related_addresses": "Related Addresses",
   "group_monitor_menu_create_automation": "Create automation from telegram",
   "group_monitor_related_addresses_title": "Related Addresses",
-  "group_monitor_related_addresses_no_project": "No ETS project loaded. Upload your project on the Info tab to find related addresses.",
+  "group_monitor_related_addresses_no_project": "No ETS project loaded. Upload your ETS project to find related addresses.",
   "group_monitor_related_addresses_no_relations": "No related addresses found for {address}.",
   "group_monitor_related_addresses_applied": "Filtered to {groupAddress} and related addresses ({destinationCount} destinations, {sourceCount} sources)",
   "project_title": "Project",

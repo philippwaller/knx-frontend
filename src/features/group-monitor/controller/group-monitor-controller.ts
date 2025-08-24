@@ -2,8 +2,10 @@ import type { ReactiveController, ReactiveControllerHost } from "lit";
 import type { HomeAssistant, Route } from "@ha/types";
 import type { SortingDirection } from "@ha/components/data-table/ha-data-table";
 import type { IconOverflowMenuItem } from "@ha/components/ha-icon-overflow-menu";
+import { mdiFilterVariant, mdiPencilOutline } from "@mdi/js";
 
 import { getGroupMonitorInfo } from "../../../services/websocket.service";
+import { HAEvents } from "../../../utils/ha-events";
 import { TelegramBufferService } from "../services/telegram-buffer-service";
 import { ConnectionService } from "../services/connection-service";
 import {
@@ -15,8 +17,6 @@ import { TelegramFormatService } from "../services/telegram-format-service";
 import { TelegramNavigationService } from "../services/telegram-navigation-service";
 import { UrlSyncService } from "../services/url-sync-service";
 import { AutomationService } from "../services/automation-service";
-import { RelatedAddressService } from "../services/related-address-service";
-import { MenuService } from "../services/menu-service";
 import { KNXLogger } from "../../../tools/knx-logger";
 import { TelegramRow } from "../types/telegram-row";
 import type { TelegramDict } from "../../../types/websocket";
@@ -59,12 +59,11 @@ export class GroupMonitorController implements ReactiveController {
 
   private _automationService = new AutomationService();
 
-  private _relatedAddressService = new RelatedAddressService();
-
-  private _menuService = new MenuService();
-
   // Project graph encapsulating project data + lookups
   private _projectGraph?: ProjectGraph;
+
+  // KNX instance for localization
+  private _knx?: KNX;
 
   // UI state
   private _expandedFilter: string | null = "source";
@@ -132,6 +131,7 @@ export class GroupMonitorController implements ReactiveController {
   public async setup(hass: HomeAssistant, knx: KNX): Promise<void> {
     if (this._connectionService.isConnected) return;
 
+    this._knx = knx;
     this._projectGraph = new ProjectGraph(knx);
 
     // Update all services with instances
@@ -140,9 +140,6 @@ export class GroupMonitorController implements ReactiveController {
     this._formatService.updateKnx(knx);
     this._automationService.updateKnx(knx);
     this._automationService.updateProjectGraph(this._projectGraph);
-    this._relatedAddressService.updateKnx(knx);
-    this._relatedAddressService.updateProjectGraph(this._projectGraph);
-    this._menuService.updateKnx(knx);
 
     // Re-apply URL filters after FilterService recreation
     const urlFilters = this._urlSyncService.getFiltersFromUrl();
@@ -153,12 +150,10 @@ export class GroupMonitorController implements ReactiveController {
     // When the project becomes available later, refresh to resolve names
     this._unsubscribeProjectLoaded = this._projectGraph.onLoaded(() => {
       this._projectVersion++;
-      this._menuService.updateProjectLoaded(true);
       this.host.requestUpdate();
     });
     if (this._projectGraph.isLoaded) {
       this._projectVersion++;
-      this._menuService.updateProjectLoaded(true);
       this.host.requestUpdate();
     }
 
@@ -421,12 +416,28 @@ export class GroupMonitorController implements ReactiveController {
   /**
    * Creates the overflow menu items for telegram rows
    */
-  public getTelegramActionsMenuItems(row: TelegramRow): IconOverflowMenuItem[] {
-    return this._menuService.getTelegramActionsMenuItems(
-      row,
-      (address) => this.applyRelatedAddressesFilter(address),
-      (telegram) => this.createAutomationFromTelegram(telegram),
-    );
+  public getTelegramActionsMenuItems(row: TelegramRow, route?: Route): IconOverflowMenuItem[] {
+    const items: IconOverflowMenuItem[] = [];
+
+    // Add related addresses option only if a project is loaded
+    if (this._isProjectLoaded) {
+      items.push({
+        path: mdiFilterVariant,
+        label: this._knx?.localize("group_monitor_menu_related_addresses") || "",
+        action: () => {
+          this.applyRelatedAddressesFilter(row.destinationAddress, route);
+        },
+      });
+    }
+
+    // Add create automation option
+    items.push({
+      path: mdiPencilOutline,
+      label: this._knx?.localize("group_monitor_menu_create_automation") || "",
+      action: () => this.createAutomationFromTelegram(row),
+    });
+
+    return items;
   }
 
   /**
@@ -437,11 +448,58 @@ export class GroupMonitorController implements ReactiveController {
   }
 
   /**
-   * Applies related addresses based filtering
+   * Gets related addresses for a group address without UI interactions
+   * @returns Object with results or null if no related addresses found
    */
-  public applyRelatedAddressesFilter(groupAddress: string, route?: Route, hostElement?: any): void {
-    const result = this._relatedAddressService.getRelatedAddresses(groupAddress, hostElement);
-    if (!result) return;
+  private _getRelatedAddresses(groupAddress: string): {
+    destinationAddresses: string[];
+    sourceAddresses: string[];
+  } | null {
+    if (!this._projectGraph) {
+      return null;
+    }
+
+    const related = this._projectGraph.getRelatedAddress(groupAddress);
+    const relatedGroupAddresses = related.groupAddresses ?? [];
+    const relatedDeviceAddresses = related.deviceAddresses ?? [];
+
+    if (relatedGroupAddresses.length === 0 && relatedDeviceAddresses.length === 0) {
+      return null;
+    }
+
+    // Include the original group address for destination filtering
+    const destinationAddresses = [groupAddress, ...relatedGroupAddresses];
+    const sourceAddresses = relatedDeviceAddresses;
+
+    return {
+      destinationAddresses,
+      sourceAddresses,
+    };
+  }
+
+  /**
+   * Applies related addresses based filtering with UI feedback
+   * @returns Object with results or null if no related addresses found
+   */
+  public applyRelatedAddressesFilter(
+    groupAddress: string,
+    route?: Route,
+  ): {
+    destinationAddresses: string[];
+    sourceAddresses: string[];
+  } | null {
+    const result = this._getRelatedAddresses(groupAddress);
+
+    if (!result) {
+      if (this._knx) {
+        const messageKey = !this._projectGraph
+          ? "group_monitor_related_addresses_no_project"
+          : "group_monitor_related_addresses_no_relations";
+
+        HAEvents.showWarning(this._knx.localize(messageKey, { address: groupAddress }) || "");
+      }
+      return null;
+    }
 
     // Clear all filters and set destination + source filters
     this.clearFilters(route);
@@ -451,6 +509,18 @@ export class GroupMonitorController implements ReactiveController {
     if (result.sourceAddresses.length) {
       this.setFilterFieldValue("source", result.sourceAddresses, route);
     }
+
+    // Show a toast notification that related addresses were applied
+
+    if (this._knx) {
+      HAEvents.showNotification(this._knx.localize("group_monitor_related_addresses_applied", {
+        groupAddress,
+        destinationCount: result.destinationAddresses.length,
+        sourceCount: result.sourceAddresses.length,
+      }) || "", 7000);
+    }
+
+    return result;
   }
 
   // ============================================================================

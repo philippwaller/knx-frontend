@@ -632,7 +632,7 @@ export class KNXGroupMonitor extends LitElement {
    * Creates the overflow menu for telegram rows using the controller
    */
   private _telegramActionsMenu(row: TelegramRow): TemplateResult {
-    const items = this.controller.getTelegramActionsMenuItems(row);
+    const items = this.controller.getTelegramActionsMenuItems(row, this.route);
     return html`
       <ha-icon-overflow-menu .hass=${this.hass} narrow .items=${items}> </ha-icon-overflow-menu>
     `;
