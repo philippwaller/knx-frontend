@@ -4,8 +4,9 @@ import type { SortingDirection } from "@ha/components/data-table/ha-data-table";
 import type { IconOverflowMenuItem } from "@ha/components/ha-icon-overflow-menu";
 import { mdiFilterVariant, mdiPencilOutline } from "@mdi/js";
 
+import type { AutomationConfig } from "@ha/data/automation";
 import { getGroupMonitorInfo } from "../../../services/websocket.service";
-import { showWarning, showNotification } from "../../../utils/ha-events";
+import { showWarning, showNotification, openAutomationEditor } from "../../../utils/ha-events";
 import { TelegramBufferService } from "../services/telegram-buffer-service";
 import { ConnectionService } from "../services/connection-service";
 import {
@@ -15,7 +16,6 @@ import {
 } from "../services/filter-service";
 import { TelegramFormatService } from "../services/telegram-format-service";
 import { UrlSyncService } from "../services/url-sync-service";
-import { AutomationService } from "../services/automation-service";
 import { KNXLogger } from "../../../tools/knx-logger";
 import { TelegramRow } from "../types/telegram-row";
 import type { TelegramDict } from "../../../types/websocket";
@@ -53,8 +53,6 @@ export class GroupMonitorController implements ReactiveController {
   private _formatService = new TelegramFormatService();
 
   private _urlSyncService = new UrlSyncService();
-
-  private _automationService = new AutomationService();
 
   // Navigation state
   private _selectedTelegramId: string | null = null;
@@ -138,8 +136,6 @@ export class GroupMonitorController implements ReactiveController {
     this._filterService = new FilterService(this._projectGraph);
     this._formatService.updateHass(hass);
     this._formatService.updateKnx(knx);
-    this._automationService.updateKnx(knx);
-    this._automationService.updateProjectGraph(this._projectGraph);
 
     // Re-apply URL filters after FilterService recreation
     const urlFilters = this._urlSyncService.getFiltersFromUrl();
@@ -518,7 +514,47 @@ export class GroupMonitorController implements ReactiveController {
    * Creates an automation from a telegram's context
    */
   public createAutomationFromTelegram(row: TelegramRow): void {
-    this._automationService.createAutomationFromTelegram(row);
+    // Map telegram type to boolean filters: keep matching type default true, disable others
+    const typeFilters: Record<
+      string,
+      Partial<Record<"group_value_write" | "group_value_read" | "group_value_response", boolean>>
+    > = {
+      GroupValueWrite: { group_value_read: false, group_value_response: false },
+      GroupValueRead: { group_value_write: false, group_value_response: false },
+      GroupValueResponse: { group_value_write: false, group_value_read: false },
+    };
+
+    const directionFilter =
+      row.direction === "Incoming" ? { outgoing: false } : { incoming: false };
+
+    const newAutomation: Partial<AutomationConfig> = {
+      alias: `KNX ${row.type} ${row.destinationAddress}`,
+      description: `${this._knx?.localize("group_monitor_telegram") || ""}: ${row.sourceAddress} ${row.sourceText ? this._projectGraph?.getIndividualAddressName(row.sourceAddress) : ``} → ${row.destinationAddress} ${row.destinationText ? ` - ${this._projectGraph?.getGroupAddressName(row.destinationAddress)}` : ``}}`,
+      mode: "single",
+      triggers: [
+        {
+          alias: `KNX ${row.type} ${row.destinationAddress}${row.destinationName ? ` - ${row.destinationText}` : ``}`,
+          trigger: "knx.telegram",
+          destination: row.destinationAddress,
+          ...(typeFilters[row.type] || {}),
+          ...directionFilter,
+        } as any,
+      ],
+      conditions: [],
+      actions: [],
+    };
+
+    logger.debug("Creating automation", newAutomation);
+
+    // Use the new HAEvents utility to open the automation editor
+    const success = openAutomationEditor({
+      data: newAutomation,
+      expanded: true,
+    });
+
+    if (!success) {
+      logger.error("Failed to open automation editor");
+    }
   }
 
   /**
