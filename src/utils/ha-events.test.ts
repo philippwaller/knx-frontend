@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { HAEvents } from "./ha-events";
+import * as HAEvents from "./ha-events";
 
 // Mock the KNXLogger
 vi.mock("../tools/knx-logger", () => ({
@@ -42,7 +42,7 @@ describe("HAEvents", () => {
             message: "Test message",
             duration: 3000,
           },
-        })
+        }),
       );
     });
 
@@ -54,7 +54,7 @@ describe("HAEvents", () => {
           detail: expect.objectContaining({
             duration: 5000,
           }),
-        })
+        }),
       );
     });
   });
@@ -81,7 +81,7 @@ describe("HAEvents", () => {
             data: automation,
             expanded: true,
           },
-        })
+        }),
       );
     });
 
@@ -95,7 +95,7 @@ describe("HAEvents", () => {
           detail: expect.objectContaining({
             expanded: true,
           }),
-        })
+        }),
       );
     });
   });
@@ -112,7 +112,7 @@ describe("HAEvents", () => {
             path: "/config/integrations",
             replace: false,
           },
-        })
+        }),
       );
     });
   });
@@ -128,7 +128,7 @@ describe("HAEvents", () => {
           detail: {
             entityId: "sensor.temperature",
           },
-        })
+        }),
       );
     });
   });
@@ -168,7 +168,7 @@ describe("HAEvents", () => {
             type: "error",
             duration: 8000,
           }),
-        })
+        }),
       );
     });
 
@@ -181,7 +181,7 @@ describe("HAEvents", () => {
             type: "success",
             duration: 4000,
           }),
-        })
+        }),
       );
     });
 
@@ -194,7 +194,7 @@ describe("HAEvents", () => {
             type: "warning",
             duration: 6000,
           }),
-        })
+        }),
       );
     });
   });
@@ -209,7 +209,7 @@ describe("HAEvents", () => {
         expect.objectContaining({
           type: "custom-event",
           detail: customData,
-        })
+        }),
       );
     });
   });

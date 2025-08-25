@@ -5,7 +5,7 @@ import type { IconOverflowMenuItem } from "@ha/components/ha-icon-overflow-menu"
 import { mdiFilterVariant, mdiPencilOutline } from "@mdi/js";
 
 import { getGroupMonitorInfo } from "../../../services/websocket.service";
-import { HAEvents } from "../../../utils/ha-events";
+import { showWarning, showNotification } from "../../../utils/ha-events";
 import { TelegramBufferService } from "../services/telegram-buffer-service";
 import { ConnectionService } from "../services/connection-service";
 import {
@@ -14,7 +14,6 @@ import {
   type DistinctValueInfo,
 } from "../services/filter-service";
 import { TelegramFormatService } from "../services/telegram-format-service";
-import { TelegramNavigationService } from "../services/telegram-navigation-service";
 import { UrlSyncService } from "../services/url-sync-service";
 import { AutomationService } from "../services/automation-service";
 import { KNXLogger } from "../../../tools/knx-logger";
@@ -53,11 +52,12 @@ export class GroupMonitorController implements ReactiveController {
 
   private _formatService = new TelegramFormatService();
 
-  private _navigationService = new TelegramNavigationService();
-
   private _urlSyncService = new UrlSyncService();
 
   private _automationService = new AutomationService();
+
+  // Navigation state
+  private _selectedTelegramId: string | null = null;
 
   // Project graph encapsulating project data + lookups
   private _projectGraph?: ProjectGraph;
@@ -177,11 +177,11 @@ export class GroupMonitorController implements ReactiveController {
   }
 
   public get selectedTelegramId(): string | null {
-    return this._navigationService.selectedTelegramId;
+    return this._selectedTelegramId;
   }
 
   public set selectedTelegramId(value: string | null) {
-    this._navigationService.selectedTelegramId = value;
+    this._selectedTelegramId = value;
     this.host.requestUpdate();
   }
 
@@ -323,32 +323,106 @@ export class GroupMonitorController implements ReactiveController {
   }
 
   // ============================================================================
-  // Navigation methods (delegate to NavigationService)
+  // Navigation methods
   // ============================================================================
 
   /**
-   * Selects the next telegram in the filtered list
+   * Navigates through the filtered telegram list
+   */
+  private _navigateTelegram(
+    direction: "next" | "previous",
+    filteredRows: TelegramRow[],
+  ): string | null {
+    if (!this._selectedTelegramId) return null;
+
+    const currentIndex = filteredRows.findIndex((row) => row.id === this._selectedTelegramId);
+
+    // Calculate step based on direction and sort order
+    // "next" = to newer telegram, "previous" = to older telegram
+    // For descending sort (newest first): next = -1 (up to newer), previous = +1 (down to older)
+    // For ascending sort (oldest first): next = +1 (down to newer), previous = -1 (up to older)
+    const isDescending = this.sortDirection === "desc";
+    const step =
+      direction === "next"
+        ? isDescending
+          ? -1
+          : 1 // next: to newer = up in desc, down in asc
+        : isDescending
+          ? 1
+          : -1; // previous: to older = down in desc, up in asc
+
+    const targetIndex = currentIndex + step;
+
+    if (targetIndex >= 0 && targetIndex < filteredRows.length) {
+      this._selectedTelegramId = filteredRows[targetIndex].id;
+      return this._selectedTelegramId;
+    }
+
+    return null;
+  }
+
+  /**
+   * Selects the next telegram in the filtered list (always goes to newer telegram)
    */
   public selectNextTelegram(): void {
     const { filteredTelegrams } = this.getFilteredTelegramsAndDistinctValues();
-    const newId = this._navigationService.selectNextTelegram(filteredTelegrams);
+    const newId = this._navigateTelegram("next", filteredTelegrams);
     if (newId) {
       this.host.requestUpdate();
     }
   }
 
   /**
-   * Selects the previous telegram in the filtered list
+   * Selects the previous telegram in the filtered list (always goes to older telegram)
    */
   public selectPreviousTelegram(): void {
     const { filteredTelegrams } = this.getFilteredTelegramsAndDistinctValues();
-    const newId = this._navigationService.selectPreviousTelegram(filteredTelegrams);
+    const newId = this._navigateTelegram("previous", filteredTelegrams);
     if (newId) {
       this.host.requestUpdate();
     }
   }
 
-  // ============================================================================
+  /**
+   * Clears the telegram selection
+   */
+  public clearSelection(): void {
+    this._selectedTelegramId = null;
+    this.host.requestUpdate();
+  }
+
+  /**
+   * Gets the navigation disable states for the current selection and sort direction
+   */
+  public getNavigationDisableStates(filteredTelegrams: TelegramRow[]): {
+    disableNext: boolean;
+    disablePrevious: boolean;
+  } {
+    if (!this._selectedTelegramId) {
+      return { disableNext: true, disablePrevious: true };
+    }
+
+    const currentIndex = filteredTelegrams.findIndex((row) => row.id === this._selectedTelegramId);
+
+    if (currentIndex === -1) {
+      return { disableNext: true, disablePrevious: true };
+    }
+
+    const isDescending = this.sortDirection === "desc";
+
+    // "next" = to newer telegram, "previous" = to older telegram
+    // For descending sort (newest first): next = -1 (up), previous = +1 (down)
+    // For ascending sort (oldest first): next = +1 (down), previous = -1 (up)
+    const disableNext = isDescending
+      ? currentIndex <= 0 // Can't go to newer in desc (already at newest)
+      : currentIndex + 1 >= filteredTelegrams.length; // Can't go to newer in asc (already at newest)
+
+    const disablePrevious = isDescending
+      ? currentIndex + 1 >= filteredTelegrams.length // Can't go to older in desc (already at oldest)
+      : currentIndex <= 0; // Can't go to older in asc (already at oldest)
+
+    return { disableNext, disablePrevious };
+  } // ============================================================================
   // UI Configuration Methods (delegate to FormatService)
   // ============================================================================
 
@@ -496,7 +570,7 @@ export class GroupMonitorController implements ReactiveController {
           ? "group_monitor_related_addresses_no_project"
           : "group_monitor_related_addresses_no_relations";
 
-        HAEvents.showWarning(this._knx.localize(messageKey, { address: groupAddress }) || "");
+        showWarning(this._knx.localize(messageKey, { address: groupAddress }) || "");
       }
       return null;
     }
@@ -513,11 +587,14 @@ export class GroupMonitorController implements ReactiveController {
     // Show a toast notification that related addresses were applied
 
     if (this._knx) {
-      HAEvents.showNotification(this._knx.localize("group_monitor_related_addresses_applied", {
-        groupAddress,
-        destinationCount: result.destinationAddresses.length,
-        sourceCount: result.sourceAddresses.length,
-      }) || "", 7000);
+      showNotification(
+        this._knx.localize("group_monitor_related_addresses_applied", {
+          groupAddress,
+          destinationCount: result.destinationAddresses.length,
+          sourceCount: result.sourceAddresses.length,
+        }) || "",
+        7000,
+      );
     }
 
     return result;

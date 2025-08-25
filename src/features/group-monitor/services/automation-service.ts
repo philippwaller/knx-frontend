@@ -1,7 +1,7 @@
 import type { AutomationConfig } from "@ha/data/automation";
 
 import { KNXLogger } from "../../../tools/knx-logger";
-import { HAEvents } from "../../../utils/ha-events";
+import { openAutomationEditor } from "../../../utils/ha-events";
 import type { KNX } from "../../../types/knx";
 import type { TelegramRow } from "../types/telegram-row";
 import type ProjectGraph from "./project-graph";
@@ -68,7 +68,7 @@ export class AutomationService {
     logger.debug("Creating automation", newAutomation);
 
     // Use the new HAEvents utility to open the automation editor
-    const success = HAEvents.openAutomationEditor({
+    const success = openAutomationEditor({
       data: newAutomation,
       expanded: true,
     });

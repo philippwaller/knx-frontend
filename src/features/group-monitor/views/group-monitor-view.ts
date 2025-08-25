@@ -652,14 +652,18 @@ export class KNXGroupMonitor extends LitElement {
       return nothing;
     }
 
+    // Get navigation disable states from controller (respects sort direction)
+    const { disableNext, disablePrevious } =
+      this.controller.getNavigationDisableStates(filteredTelegrams);
+
     return html`
       <knx-group-monitor-telegram-info-dialog
         .hass=${this.hass}
         .knx=${this.knx}
         .narrow=${this.narrow}
         .telegram=${telegramRow}
-        .disableNext=${arrayIndex + 1 >= filteredTelegrams.length}
-        .disablePrevious=${arrayIndex <= 0}
+        .disableNext=${disableNext}
+        .disablePrevious=${disablePrevious}
         @next-telegram=${this._selectNextTelegram}
         @previous-telegram=${this._selectPreviousTelegram}
         @dialog-closed=${this._handleDialogClosed}

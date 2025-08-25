@@ -60,144 +60,123 @@ function fireParentEvent(eventType: string, eventData?: any): boolean {
 }
 
 /**
- * Utility class for triggering events in the main Home Assistant Frontend
+ * Shows a notification message in the main Home Assistant interface
  */
-export class HAEvents {
-  /**
-   * Shows a notification message in the main Home Assistant interface
-   */
-  static showNotification(message: string, duration?: number): boolean {
-    return fireParentEvent("hass-notification", {
-      message,
-      duration: duration || 5000,
-    });
-  }
-
-  /**
-   * Shows a notification message with an action button
-   */
-  static showNotificationWithAction(params: NotificationMessage): boolean {
-    return fireParentEvent("hass-notification", {
-      message: params.message,
-      duration: params.duration || 5000,
-      action: params.action,
-    });
-  }
-
-  /**
-   * Opens the automation editor with pre-filled data
-   */
-  static openAutomationEditor(params: AutomationEditorParams): boolean {
-    return fireParentEvent("hass-automation-editor", {
-      data: params.data,
-      expanded: params.expanded !== false, // Default to true
-    });
-  }
-
-  /**
-   * Navigates to a specific path in Home Assistant
-   */
-  static navigate(path: string, replace?: boolean): boolean {
-    return fireParentEvent("hass-location-changed", {
-      path,
-      replace: replace || false,
-    });
-  }
-
-  /**
-   * Opens the more info dialog for an entity
-   */
-  static showMoreInfo(entityId: string): boolean {
-    return fireParentEvent("hass-more-info", {
-      entityId,
-    });
-  }
-
-  /**
-   * Shows an error message to the user
-   */
-  static showError(message: string): boolean {
-    return fireParentEvent("hass-notification", {
-      message,
-      type: "error",
-      duration: 8000,
-    });
-  }
-
-  /**
-   * Shows a success message to the user
-   */
-  static showSuccess(message: string): boolean {
-    return fireParentEvent("hass-notification", {
-      message,
-      type: "success",
-      duration: 4000,
-    });
-  }
-
-  /**
-   * Shows a warning message to the user
-   */
-  static showWarning(message: string): boolean {
-    return fireParentEvent("hass-notification", {
-      message,
-      type: "warning",
-      duration: 6000,
-    });
-  }
-
-  /**
-   * Opens the KNX integration config flow
-   */
-  static openKNXConfig(): boolean {
-    return fireParentEvent("hass-location-changed", {
-      path: "/config/integrations/integration/knx",
-    });
-  }
-
-  /**
-   * Reloads the KNX integration
-   */
-  static reloadKNXIntegration(): boolean {
-    return fireParentEvent("hass-service-call", {
-      domain: "homeassistant",
-      service: "reload_config_entry",
-      service_data: {
-        entry_id: "knx", // This would need to be the actual config entry ID
-      },
-    });
-  }
-
-  /**
-   * Shows a generic dialog
-   */
-  static showDialog(dialogTag: string, dialogParams?: any): boolean {
-    return fireParentEvent("show-dialog", {
-      dialogTag,
-      dialogParams,
-    });
-  }
-
-  /**
-   * Generic method to fire any custom event
-   */
-  static fireCustomEvent(eventType: string, eventData?: any): boolean {
-    return fireParentEvent(eventType, eventData);
-  }
+export function showNotification(message: string, duration?: number): boolean {
+  return fireParentEvent("hass-notification", {
+    message,
+    duration: duration || 5000,
+  });
 }
 
-// Export convenience functions for common operations
-export const {
-  showNotification,
-  showNotificationWithAction,
-  openAutomationEditor,
-  navigate,
-  showMoreInfo,
-  showError,
-  showSuccess,
-  showWarning,
-  openKNXConfig,
-  reloadKNXIntegration,
-  showDialog,
-  fireCustomEvent,
-} = HAEvents;
+/**
+ * Shows a notification message with an action button
+ */
+export function showNotificationWithAction(params: NotificationMessage): boolean {
+  return fireParentEvent("hass-notification", {
+    message: params.message,
+    duration: params.duration || 5000,
+    action: params.action,
+  });
+}
+
+/**
+ * Opens the automation editor with pre-filled data
+ */
+export function openAutomationEditor(params: AutomationEditorParams): boolean {
+  return fireParentEvent("hass-automation-editor", {
+    data: params.data,
+    expanded: params.expanded !== false, // Default to true
+  });
+}
+
+/**
+ * Navigates to a specific path in Home Assistant
+ */
+export function navigate(path: string, replace?: boolean): boolean {
+  return fireParentEvent("hass-location-changed", {
+    path,
+    replace: replace || false,
+  });
+}
+
+/**
+ * Opens the more info dialog for an entity
+ */
+export function showMoreInfo(entityId: string): boolean {
+  return fireParentEvent("hass-more-info", {
+    entityId,
+  });
+}
+
+/**
+ * Shows an error message to the user
+ */
+export function showError(message: string): boolean {
+  return fireParentEvent("hass-notification", {
+    message,
+    type: "error",
+    duration: 8000,
+  });
+}
+
+/**
+ * Shows a success message to the user
+ */
+export function showSuccess(message: string): boolean {
+  return fireParentEvent("hass-notification", {
+    message,
+    type: "success",
+    duration: 4000,
+  });
+}
+
+/**
+ * Shows a warning message to the user
+ */
+export function showWarning(message: string): boolean {
+  return fireParentEvent("hass-notification", {
+    message,
+    type: "warning",
+    duration: 6000,
+  });
+}
+
+/**
+ * Opens the KNX integration config flow
+ */
+export function openKNXConfig(): boolean {
+  return fireParentEvent("hass-location-changed", {
+    path: "/config/integrations/integration/knx",
+  });
+}
+
+/**
+ * Reloads the KNX integration
+ */
+export function reloadKNXIntegration(): boolean {
+  return fireParentEvent("hass-service-call", {
+    domain: "homeassistant",
+    service: "reload_config_entry",
+    service_data: {
+      entry_id: "knx", // This would need to be the actual config entry ID
+    },
+  });
+}
+
+/**
+ * Shows a generic dialog
+ */
+export function showDialog(dialogTag: string, dialogParams?: any): boolean {
+  return fireParentEvent("show-dialog", {
+    dialogTag,
+    dialogParams,
+  });
+}
+
+/**
+ * Generic method to fire any custom event
+ */
+export function fireCustomEvent(eventType: string, eventData?: any): boolean {
+  return fireParentEvent(eventType, eventData);
+}

@@ -57,12 +57,6 @@ vi.mock("../services/telegram-format-service", () => ({
   })),
 }));
 
-vi.mock("../services/telegram-navigation-service", () => ({
-  TelegramNavigationService: vi.fn().mockImplementation(() => ({
-    selectedTelegramId: null,
-  })),
-}));
-
 vi.mock("../services/url-sync-service", () => ({
   UrlSyncService: vi.fn().mockImplementation(() => ({
     getFiltersFromUrl: vi.fn(),
