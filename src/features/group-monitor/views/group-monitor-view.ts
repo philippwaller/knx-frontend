@@ -25,7 +25,9 @@ import "../../../components/data-table/filter/knx-list-filter";
 
 import { customElement, property } from "lit/decorators";
 import { mdiDeleteSweep, mdiFastForward, mdiPause, mdiRefresh } from "@mdi/js";
-import { formatTimeWithMilliseconds } from "../../../utils/format";
+import { isMobileClient } from "@ha/util/is_mobile";
+import { isTouch } from "@ha/util/is_touch";
+import { formatTimeWithMilliseconds, formatTelegramOffset } from "../../../utils/format";
 import type { TelegramRow, TelegramRowKeys } from "../types/telegram-row";
 import type { ToggleFilterEvent } from "../../../components/data-table/cell/knx-table-cell-filterable";
 import { GroupMonitorController } from "../controller/group-monitor-controller";
@@ -157,36 +159,163 @@ export class KNXGroupMonitor extends LitElement {
     return this.controller.getSearchLabel(this.narrow);
   }
 
+  /**
+   * Detects if the current device is a mobile touch device
+   */
+  private get isMobileTouchDevice(): boolean {
+    return isMobileClient && isTouch;
+  }
+
   // ============================================================================
-  // Filter Configurations (now provided by controller)
+  // Filter Configurations (memoized local implementations)
   // ============================================================================
 
   /**
-   * Gets the source filter configuration from the controller
+   * Memoized configuration for source address filter
    */
+  private _sourceFilterConfig = memoize(
+    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
+      idField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => item.id,
+      },
+      primaryField: {
+        fieldName: this.knx?.localize("telegram_filter_source_sort_by_primaryText") || "",
+        filterable: true,
+        sortable: true,
+        sortAscendingText: this.knx?.localize("telegram_filter_sort_ascending") || "",
+        sortDescendingText: this.knx?.localize("telegram_filter_sort_descending") || "",
+        sortDefaultDirection: "asc",
+        mapper: (item: DistinctValueInfo) => item.id,
+      },
+      secondaryField: {
+        fieldName: this.knx?.localize("telegram_filter_source_sort_by_secondaryText") || "",
+        filterable: true,
+        sortable: true,
+        sortAscendingText: this.knx?.localize("telegram_filter_sort_ascending") || "",
+        sortDescendingText: this.knx?.localize("telegram_filter_sort_descending") || "",
+        sortDefaultDirection: "asc",
+        mapper: (item: DistinctValueInfo) => item.name,
+      },
+      badgeField: {
+        fieldName: this.knx?.localize("telegram_filter_source_sort_by_badge") || "",
+        filterable: false,
+        sortable: true,
+        sortDefaultDirection: "desc",
+        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
+      },
+    }),
+  );
+
   private get sourceFilterConfig(): ListFilterConfig<DistinctValueInfo> {
-    return this.controller.getSourceFilterConfig();
+    return this._sourceFilterConfig(this.hass?.language || "en");
   }
 
   /**
-   * Gets the destination filter configuration from the controller
+   * Memoized configuration for destination address filter
    */
+  private _destinationFilterConfig = memoize(
+    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
+      idField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => item.id,
+      },
+      primaryField: {
+        fieldName: this.knx?.localize("telegram_filter_destination_sort_by_primaryText") || "",
+        filterable: true,
+        sortable: true,
+        sortAscendingText: this.knx?.localize("telegram_filter_sort_ascending") || "",
+        sortDescendingText: this.knx?.localize("telegram_filter_sort_descending") || "",
+        sortDefaultDirection: "asc",
+        mapper: (item: DistinctValueInfo) => item.id,
+      },
+      secondaryField: {
+        fieldName: this.knx?.localize("telegram_filter_destination_sort_by_secondaryText") || "",
+        filterable: true,
+        sortable: true,
+        sortAscendingText: this.knx?.localize("telegram_filter_sort_ascending") || "",
+        sortDescendingText: this.knx?.localize("telegram_filter_sort_descending") || "",
+        sortDefaultDirection: "asc",
+        mapper: (item: DistinctValueInfo) => item.name,
+      },
+      badgeField: {
+        fieldName: this.knx?.localize("telegram_filter_destination_sort_by_badge") || "",
+        filterable: false,
+        sortable: true,
+        sortDefaultDirection: "desc",
+        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
+      },
+    }),
+  );
+
   private get destinationFilterConfig(): ListFilterConfig<DistinctValueInfo> {
-    return this.controller.getDestinationFilterConfig();
+    return this._destinationFilterConfig(this.hass?.language || "en");
   }
 
   /**
-   * Gets the direction filter configuration from the controller
+   * Memoized configuration for direction filter (Incoming/Outgoing)
    */
+  private _directionFilterConfig = memoize(
+    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
+      idField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => item.id,
+      },
+      primaryField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => item.id,
+      },
+      secondaryField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => item.name,
+      },
+      badgeField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
+      },
+    }),
+  );
+
   private get directionFilterConfig(): ListFilterConfig<DistinctValueInfo> {
-    return this.controller.getDirectionFilterConfig();
+    return this._directionFilterConfig(this.hass?.language || "en");
   }
 
   /**
-   * Gets the telegram type filter configuration from the controller
+   * Memoized configuration for telegram type filter
    */
+  private _telegramTypeFilterConfig = memoize(
+    (_language: string): ListFilterConfig<DistinctValueInfo> => ({
+      idField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => item.id,
+      },
+      primaryField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => item.id,
+      },
+      secondaryField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => item.name,
+      },
+      badgeField: {
+        filterable: false,
+        sortable: false,
+        mapper: (item: DistinctValueInfo) => `${item.crossFilteredCount}`,
+      },
+    }),
+  );
+
   private get telegramTypeFilterConfig(): ListFilterConfig<DistinctValueInfo> {
-    return this.controller.getTelegramTypeFilterConfig();
+    return this._telegramTypeFilterConfig(this.hass?.language || "en");
   }
 
   // ============================================================================
@@ -421,7 +550,7 @@ export class KNXGroupMonitor extends LitElement {
             .filterActive=${(this.controller.filters.source || []).includes(
               row.sourceAddress as string,
             )}
-            .filterDisabled=${this.controller.isMobileTouchDevice}
+            .filterDisabled=${this.isMobileTouchDevice}
             @toggle-filter=${this._handleSourceFilterToggle}
           >
             <div class="primary" slot="primary">${row.sourceAddress}</div>
@@ -470,7 +599,7 @@ export class KNXGroupMonitor extends LitElement {
             .filterActive=${(this.controller.filters.destination || []).includes(
               row.destinationAddress as string,
             )}
-            .filterDisabled=${this.controller.isMobileTouchDevice}
+            .filterDisabled=${this.isMobileTouchDevice}
             @toggle-filter=${this._handleDestinationFilterToggle}
           >
             <div class="primary" slot="primary">${row.destinationAddress}</div>
@@ -521,7 +650,7 @@ export class KNXGroupMonitor extends LitElement {
             .filterActive=${(this.controller.filters.telegramtype || []).includes(
               row.type as string,
             )}
-            .filterDisabled=${this.controller.isMobileTouchDevice}
+            .filterDisabled=${this.isMobileTouchDevice}
             @toggle-filter=${this._handleTelegramTypeFilterToggle}
           >
             <div class="primary" slot="primary" title=${row.type}>${row.type}</div>
@@ -622,10 +751,10 @@ export class KNXGroupMonitor extends LitElement {
   // ============================================================================
 
   /**
-   * Formats the telegram offset with appropriate precision using the controller
+   * Formats the telegram offset with appropriate precision
    */
   private _formatOffsetWithPrecision(offsetMicros: number | null): string {
-    return this.controller.formatOffsetWithPrecision(offsetMicros);
+    return formatTelegramOffset(offsetMicros);
   }
 
   /**
@@ -806,7 +935,7 @@ export class KNXGroupMonitor extends LitElement {
           .selectedOptions=${this.controller.filters.source}
           .expanded=${this.controller.expandedFilter === "source"}
           .narrow=${this.narrow}
-          .isMobileDevice=${this.controller.isMobileTouchDevice}
+          .isMobileDevice=${this.isMobileTouchDevice}
           .filterTitle=${this.knx.localize("group_monitor_source")}
           @selection-changed=${this._handleSourceFilterChange}
           @expanded-changed=${this._handleSourceFilterExpanded}
@@ -824,7 +953,7 @@ export class KNXGroupMonitor extends LitElement {
           .selectedOptions=${this.controller.filters.destination}
           .expanded=${this.controller.expandedFilter === "destination"}
           .narrow=${this.narrow}
-          .isMobileDevice=${this.controller.isMobileTouchDevice}
+          .isMobileDevice=${this.isMobileTouchDevice}
           .filterTitle=${this.knx.localize("group_monitor_destination")}
           @selection-changed=${this._handleDestinationFilterChange}
           @expanded-changed=${this._handleDestinationFilterExpanded}
@@ -842,7 +971,7 @@ export class KNXGroupMonitor extends LitElement {
           .pinSelectedItems=${false}
           .expanded=${this.controller.expandedFilter === "direction"}
           .narrow=${this.narrow}
-          .isMobileDevice=${this.controller.isMobileTouchDevice}
+          .isMobileDevice=${this.isMobileTouchDevice}
           .filterTitle=${this.knx.localize("group_monitor_direction")}
           @selection-changed=${this._handleDirectionFilterChange}
           @expanded-changed=${this._handleDirectionFilterExpanded}
@@ -859,7 +988,7 @@ export class KNXGroupMonitor extends LitElement {
           .pinSelectedItems=${false}
           .expanded=${this.controller.expandedFilter === "telegramtype"}
           .narrow=${this.narrow}
-          .isMobileDevice=${this.controller.isMobileTouchDevice}
+          .isMobileDevice=${this.isMobileTouchDevice}
           .filterTitle=${this.knx.localize("group_monitor_type")}
           @selection-changed=${this._handleTelegramTypeFilterChange}
           @expanded-changed=${this._handleTelegramTypeFilterExpanded}

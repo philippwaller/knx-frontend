@@ -131,49 +131,6 @@ describe("GroupMonitorController", () => {
       controller.selectedTelegramId = "telegram-123";
       expect(controller.selectedTelegramId).toBe("telegram-123");
     });
-
-    it("should format offset with precision", () => {
-      // Test millisecond precision
-      expect(controller.formatOffsetWithPrecision(1000)).toBeDefined();
-
-      // Test null offset
-      expect(controller.formatOffsetWithPrecision(null)).toBeDefined();
-
-      // Test microsecond precision for sub-millisecond values
-      expect(controller.formatOffsetWithPrecision(500)).toBeDefined();
-    });
-  });
-
-  describe("Filter Configurations", () => {
-    beforeEach(async () => {
-      await controller.setup(mockHass, mockKnx);
-    });
-
-    it("should provide source filter configuration", () => {
-      const config = controller.getSourceFilterConfig();
-      expect(config).toBeDefined();
-      expect(config.idField).toBeDefined();
-      expect(config.primaryField).toBeDefined();
-      expect(config.secondaryField).toBeDefined();
-      expect(config.badgeField).toBeDefined();
-    });
-
-    it("should provide destination filter configuration", () => {
-      const config = controller.getDestinationFilterConfig();
-      expect(config).toBeDefined();
-      expect(config.idField).toBeDefined();
-      expect(config.primaryField).toBeDefined();
-    });
-
-    it("should provide direction filter configuration", () => {
-      const config = controller.getDirectionFilterConfig();
-      expect(config).toBeDefined();
-    });
-
-    it("should provide telegram type filter configuration", () => {
-      const config = controller.getTelegramTypeFilterConfig();
-      expect(config).toBeDefined();
-    });
   });
 
   describe("Search Label Generation", () => {
@@ -192,23 +149,6 @@ describe("GroupMonitorController", () => {
     });
   });
 
-  describe("Business Logic", () => {
-    it("should detect mobile touch device", () => {
-      const isMobile = controller.isMobileTouchDevice;
-      expect(typeof isMobile).toBe("boolean");
-    });
-
-    it("should provide column configuration data", () => {
-      const config = controller.getColumnConfig(false, true);
-      expect(config).toEqual({
-        narrow: false,
-        projectLoaded: true,
-        language: "en",
-        localizedLabels: expect.any(Object),
-      });
-    });
-  });
-
   describe("Menu Actions", () => {
     beforeEach(async () => {
       await controller.setup(mockHass, mockKnx);
@@ -216,7 +156,7 @@ describe("GroupMonitorController", () => {
 
     it("should create telegram action menu items when project is loaded", () => {
       // Mock that project is loaded
-      controller._isProjectLoaded = true;
+      controller.isProjectLoaded = true;
 
       const mockTelegram = {
         destinationAddress: "1/2/3",
@@ -235,7 +175,7 @@ describe("GroupMonitorController", () => {
 
     it("should create telegram action menu items without related addresses when project is not loaded", () => {
       // Mock that project is not loaded
-      controller._isProjectLoaded = false;
+      controller.isProjectLoaded = false;
 
       const mockTelegram = {
         destinationAddress: "1/2/3",
@@ -252,7 +192,7 @@ describe("GroupMonitorController", () => {
 
     it("should pass route parameter to applyRelatedAddressesFilter when provided", () => {
       // Mock that project is loaded
-      controller._isProjectLoaded = true;
+      controller.isProjectLoaded = true;
 
       const mockTelegram = {
         destinationAddress: "1/2/3",

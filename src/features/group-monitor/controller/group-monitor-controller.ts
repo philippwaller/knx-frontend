@@ -9,19 +9,13 @@ import { getGroupMonitorInfo } from "../../../services/websocket.service";
 import { showWarning, showNotification, openAutomationEditor } from "../../../utils/ha-events";
 import { TelegramBufferService } from "../services/telegram-buffer-service";
 import { ConnectionService } from "../services/connection-service";
-import {
-  FilterService,
-  type FilteredTelegramsResult,
-  type DistinctValueInfo,
-} from "../services/filter-service";
-import { TelegramFormatService } from "../services/telegram-format-service";
+import { FilterService, type FilteredTelegramsResult } from "../services/filter-service";
 import { UrlSyncService } from "../services/url-sync-service";
 import { KNXLogger } from "../../../tools/knx-logger";
 import { TelegramRow } from "../types/telegram-row";
 import type { TelegramDict } from "../../../types/websocket";
 import ProjectGraph from "../services/project-graph";
 import type { KNX } from "../../../types/knx";
-import type { Config as ListFilterConfig } from "../../../components/data-table/filter/knx-list-filter";
 
 const logger = new KNXLogger("group_monitor_controller");
 
@@ -49,8 +43,6 @@ export class GroupMonitorController implements ReactiveController {
   private _telegramBuffer = new TelegramBufferService(2000);
 
   private _filterService: FilterService;
-
-  private _formatService = new TelegramFormatService();
 
   private _urlSyncService = new UrlSyncService();
 
@@ -134,8 +126,6 @@ export class GroupMonitorController implements ReactiveController {
 
     // Update all services with instances
     this._filterService = new FilterService(this._projectGraph);
-    this._formatService.updateHass(hass);
-    this._formatService.updateKnx(knx);
 
     // Re-apply URL filters after FilterService recreation
     const urlFilters = this._urlSyncService.getFiltersFromUrl();
@@ -217,6 +207,10 @@ export class GroupMonitorController implements ReactiveController {
 
   public get isProjectLoaded(): boolean | undefined {
     return this._isProjectLoaded;
+  }
+
+  public set isProjectLoaded(value: boolean | undefined) {
+    this._isProjectLoaded = value;
   }
 
   public get connectionError(): string | null {
@@ -427,56 +421,14 @@ export class GroupMonitorController implements ReactiveController {
    */
   public getSearchLabel(narrow: boolean): string {
     const { filteredTelegrams } = this.getFilteredTelegramsAndDistinctValues();
-    return this._formatService.getSearchLabel(narrow, filteredTelegrams.length);
-  }
-
-  /**
-   * Detects if the current device is a mobile touch device
-   */
-  public get isMobileTouchDevice(): boolean {
-    return this._formatService.isMobileTouchDevice;
-  }
-
-  /**
-   * Gets the filter configuration for source addresses
-   */
-  public getSourceFilterConfig(): ListFilterConfig<DistinctValueInfo> {
-    return this._formatService.getSourceFilterConfig();
-  }
-
-  /**
-   * Gets the filter configuration for destination addresses
-   */
-  public getDestinationFilterConfig(): ListFilterConfig<DistinctValueInfo> {
-    return this._formatService.getDestinationFilterConfig();
-  }
-
-  /**
-   * Gets the filter configuration for direction
-   */
-  public getDirectionFilterConfig(): ListFilterConfig<DistinctValueInfo> {
-    return this._formatService.getDirectionFilterConfig();
-  }
-
-  /**
-   * Gets the filter configuration for telegram type
-   */
-  public getTelegramTypeFilterConfig(): ListFilterConfig<DistinctValueInfo> {
-    return this._formatService.getTelegramTypeFilterConfig();
-  }
-
-  /**
-   * Formats the telegram offset with appropriate precision
-   */
-  public formatOffsetWithPrecision(offsetMicros: number | null): string {
-    return this._formatService.formatOffsetWithPrecision(offsetMicros);
-  }
-
-  /**
-   * Gets column configuration data for the data table
-   */
-  public getColumnConfig(narrow: boolean, projectLoaded: boolean) {
-    return this._formatService.getColumnConfig(narrow, projectLoaded);
+    if (narrow) {
+      return this._knx?.localize("group_monitor_search_label_narrow") || "";
+    }
+    const key =
+      filteredTelegrams.length === 1
+        ? "group_monitor_search_label_singular"
+        : "group_monitor_search_label";
+    return this._knx?.localize(key, { count: filteredTelegrams.length }) || "";
   }
 
   // ============================================================================

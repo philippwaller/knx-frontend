@@ -50,13 +50,6 @@ vi.mock("../services/filter-service", () => ({
   })),
 }));
 
-vi.mock("../services/telegram-format-service", () => ({
-  TelegramFormatService: vi.fn().mockImplementation(() => ({
-    updateHass: vi.fn(),
-    updateKnx: vi.fn(),
-  })),
-}));
-
 vi.mock("../services/url-sync-service", () => ({
   UrlSyncService: vi.fn().mockImplementation(() => ({
     getFiltersFromUrl: vi.fn(),

@@ -238,3 +238,27 @@ export function formatTimeDelta(
 
   return `${sign}${time}${fractional}`;
 }
+
+/**
+ * Formats telegram offset with appropriate precision.
+ * Uses microsecond precision for small offsets (< 1ms) and millisecond precision otherwise.
+ *
+ * @param offsetMicros - Telegram offset in microseconds (null for no offset)
+ * @returns Formatted offset string with appropriate precision
+ */
+export function formatTelegramOffset(offsetMicros: number | null): string {
+  if (offsetMicros === null) {
+    return formatTimeDelta(offsetMicros);
+  }
+
+  // Convert to milliseconds to check if it's exactly 0
+  const offsetMs = Math.round(offsetMicros / 1000);
+
+  // If millisecond part is 0 (e.g., 00:00.000), use microsecond precision
+  if (offsetMs === 0 && offsetMicros !== 0) {
+    return formatTimeDelta(offsetMicros, "microseconds");
+  }
+
+  // Otherwise use default millisecond precision
+  return formatTimeDelta(offsetMicros, "milliseconds");
+}
