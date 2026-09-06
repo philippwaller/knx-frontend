@@ -4,6 +4,7 @@ import {
   TelegramDictFormatter,
   formatTimeWithMilliseconds,
   formatDate,
+  formatDateTime,
   formatDateTimeWithMilliseconds,
   formatIsoTimestampWithMicroseconds,
   extractMicrosecondsFromIso,
@@ -267,6 +268,14 @@ describe("formatTimeDelta", () => {
       const date = new Date("2024-02-29T12:00:00.500Z");
       const result = formatDate(date);
       expect(result).toMatch(/^\d+[./]\d+[./]\d+$/);
+    });
+  });
+
+  describe("formatDateTime", () => {
+    it("should format date and time without milliseconds", () => {
+      const date = new Date("2024-01-01T14:30:25.123Z");
+      const result = formatDateTime(date);
+      expect(result).toMatch(/\d+[./]\d+[./]\d+.+\d{2}:\d{2}:\d{2}$/);
     });
   });
 
