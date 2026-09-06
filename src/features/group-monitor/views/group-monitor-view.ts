@@ -7,6 +7,7 @@ import "@ha/layouts/hass-loading-screen";
 import "@ha/layouts/hass-tabs-subpage-data-table";
 import "@ha/components/ha-alert";
 import "@ha/components/ha-button";
+import "@ha/components/ha-icon-button";
 import type { HASSDomEvent } from "@ha/common/dom/fire_event";
 import type {
   DataTableColumnContainer,
@@ -26,9 +27,16 @@ import "../../../components/data-table/filter/knx-list-filter";
 import "../../../components/data-table/filter/knx-time-delta-filter";
 import "../../../components/data-table/filter/knx-time-range-filter";
 
-import { customElement, property, query } from "lit/decorators";
+import { customElement, property, query, state } from "lit/decorators";
 import { storage } from "@ha/common/decorators/storage";
-import { mdiDatabaseRemove, mdiDeleteSweep, mdiFastForward, mdiPause, mdiRefresh } from "@mdi/js";
+import {
+  mdiClose,
+  mdiDatabaseRemove,
+  mdiDeleteSweep,
+  mdiFastForward,
+  mdiPause,
+  mdiRefresh,
+} from "@mdi/js";
 
 import { showTelegramInfoDialog } from "../dialogs/show-telegram-info-dialog";
 import type { TelegramInfoDialogParams } from "../dialogs/telegram-info-dialog";
@@ -52,6 +60,7 @@ import type {
 } from "../../../components/data-table/filter/knx-list-filter";
 import type { TimeDeltaChangedEvent } from "../../../components/data-table/filter/knx-time-delta-filter";
 import type { TimeRangeChangedEvent } from "../../../components/data-table/filter/knx-time-range-filter";
+import { showKnxProjectUploadDialog } from "../../../dialogs/show-knx-project-upload-dialog";
 
 /** Persisted column layout (order + hidden columns) for one breakpoint. */
 interface StoredColumnLayout {
@@ -155,6 +164,16 @@ export class KNXGroupMonitor extends LitElement {
           display: flex;
           flex-direction: column;
         }
+
+        .project-alert-actions {
+          display: flex;
+          align-items: center;
+        }
+
+        .project-alert-actions ha-button {
+          width: max-content;
+          white-space: nowrap;
+        }
       `,
     ];
   }
@@ -180,6 +199,8 @@ export class KNXGroupMonitor extends LitElement {
     subscribe: false,
   })
   private _storedColumns?: StoredColumns;
+
+  @state() private _projectAlertDismissed = false;
 
   /** GroupMonitor controller instance */
   private controller = new GroupMonitorController(this);
@@ -600,6 +621,14 @@ export class KNXGroupMonitor extends LitElement {
   /** Attempts to reconnect after a connection error */
   private async _retryConnection(): Promise<void> {
     await this.controller.retryConnection(this.hass);
+  }
+
+  private _openProjectUploadDialog(): void {
+    showKnxProjectUploadDialog(this, { hass: this.hass });
+  }
+
+  private _dismissProjectAlert(): void {
+    this._projectAlertDismissed = true;
   }
 
   /** Clears the persistent cache (IndexedDB + coverage), then reloads */
@@ -1137,11 +1166,7 @@ export class KNXGroupMonitor extends LitElement {
         .narrow=${this.narrow!}
         .tabs=${[groupMonitorTab]}
         .route=${this.route!}
-        .columns=${this._columns(
-          this.narrow,
-          this.controller.isProjectLoaded === true,
-          this.hass.language,
-        )}
+        .columns=${this._columns(this.narrow, this.knx.projectInfo !== null, this.hass.language)}
         .noDataText=${this.knx.localize("group_monitor_waiting_message")}
         .data=${filteredTelegrams as any}
         .hasFab=${false}
@@ -1205,15 +1230,27 @@ export class KNXGroupMonitor extends LitElement {
             : ""
         }
         ${
-          this.controller.isProjectLoaded === false
+          this.knx.projectInfo === null && !this._projectAlertDismissed
             ? html`
                 <ha-alert
                   slot="top-header"
                   .alertType=${"info"}
-                  .dismissable=${true}
+                  .narrow=${this.narrow}
                   .title=${this.knx.localize("group_monitor_project_not_loaded_title")}
                 >
                   ${this.knx.localize("group_monitor_project_not_loaded_message")}
+                  <div class="project-alert-actions" slot="action">
+                    <ha-button appearance="plain" @click=${this._openProjectUploadDialog}>
+                      ${this.knx.localize(
+                        "component.knx.config_panel.dialogs.project_upload.title",
+                      )}
+                    </ha-button>
+                    <ha-icon-button
+                      .label=${this.hass.localize("ui.common.dismiss_alert")}
+                      .path=${mdiClose}
+                      @click=${this._dismissProjectAlert}
+                    ></ha-icon-button>
+                  </div>
                 </ha-alert>
               `
             : nothing

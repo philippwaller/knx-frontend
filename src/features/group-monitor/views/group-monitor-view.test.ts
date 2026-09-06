@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render } from "lit";
 import { KNXGroupMonitor, migrateStoredColumns } from "./group-monitor-view";
 
 vi.mock("@lit-labs/virtualizer", () => ({}));
@@ -12,11 +13,43 @@ describe("KNXGroupMonitor", () => {
     element.knx = {
       localize: vi.fn((key) => key),
       connectionInfo: { telegram_retention: 10 },
+      projectInfo: null,
     } as any;
     element.hass = {
       callWS: vi.fn(),
       connected: true,
+      localize: vi.fn((key) => key),
     } as any;
+  });
+
+  it("opens the ETS project upload dialog from the missing-project alert", () => {
+    let dialogEvent: CustomEvent | undefined;
+    element.addEventListener("show-dialog", (event) => {
+      dialogEvent = event as CustomEvent;
+    });
+    const container = document.createElement("div");
+    render((element as any).render(), container, { host: element });
+
+    const uploadButton = container.querySelector("ha-alert ha-button") as HTMLElement | null;
+    expect(uploadButton).not.toBeNull();
+    uploadButton!.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+
+    expect(dialogEvent?.detail).toMatchObject({
+      dialogTag: "knx-project-upload-dialog",
+      dialogParams: { hass: element.hass },
+    });
+  });
+
+  it("dismisses the missing-project alert", () => {
+    const container = document.createElement("div");
+    render((element as any).render(), container, { host: element });
+
+    const dismissButton = container.querySelector("ha-alert ha-icon-button") as HTMLElement | null;
+    expect(dismissButton).not.toBeNull();
+    dismissButton!.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    render((element as any).render(), container, { host: element });
+
+    expect(container.querySelector("ha-alert")).toBeNull();
   });
 
   it("applies a selected time range with the configured retention", () => {

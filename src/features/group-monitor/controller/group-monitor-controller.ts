@@ -116,9 +116,6 @@ export class GroupMonitorController implements ReactiveController {
 
   private _isPaused = false;
 
-  // undefined until initial info is fetched; then true/false
-  private _isProjectLoaded: boolean | undefined = undefined;
-
   private _connectionError: string | null = null;
 
   // Time-delta context filter (milliseconds)
@@ -275,10 +272,6 @@ export class GroupMonitorController implements ReactiveController {
 
   public get isPaused(): boolean {
     return this._isPaused;
-  }
-
-  public get isProjectLoaded(): boolean | undefined {
-    return this._isProjectLoaded;
   }
 
   public get connectionError(): string | null {
@@ -1291,7 +1284,6 @@ export class GroupMonitorController implements ReactiveController {
 
     try {
       const info = await getGroupMonitorInfo(hass);
-      this._isProjectLoaded = info.project_loaded;
 
       // Calculate dynamic telegram storage limit
       const telegramsLength = info.recent_telegrams.length;

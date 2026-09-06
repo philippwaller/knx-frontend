@@ -64,7 +64,7 @@
   "group_monitor_paused_message": "New telegrams will not be displayed until you resume monitoring.",
   "group_monitor_telegram": "KNX telegram",
   "group_monitor_project_not_loaded_title": "ETS project not loaded",
-  "group_monitor_project_not_loaded_message": "For richer context like names and values, upload your ETS project on the Info tab.",
+  "group_monitor_project_not_loaded_message": "Device names and telegram values can only be displayed after an ETS project has been loaded.",
   "project_title": "Project",
   "project_view_upload": "To use the project viewer please upload a KNX project first!",
   "project_view_version_l1": "The `XKNXProject` version used for parsing the ETS project was:",
