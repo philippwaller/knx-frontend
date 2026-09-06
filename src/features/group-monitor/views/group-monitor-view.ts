@@ -36,12 +36,14 @@ import {
   mdiFastForward,
   mdiPause,
   mdiRefresh,
+  mdiRobot,
 } from "@mdi/js";
 
 import { showTelegramInfoDialog } from "../dialogs/show-telegram-info-dialog";
 import type { TelegramInfoDialogParams } from "../dialogs/telegram-info-dialog";
 import { formatTimeWithMilliseconds, formatTimeDelta, formatDate } from "../../../utils/format";
 import type { TelegramRow, TelegramRowKeys } from "../types/telegram-row";
+import { buildAutomationFromTelegram, openAutomationEditor } from "../utils/automation";
 import type { ToggleFilterEvent } from "../../../components/data-table/cell/knx-table-cell-filterable";
 import { GroupMonitorController, UNKNOWN_DPT_ID } from "../controller/group-monitor-controller";
 import type {
@@ -1068,8 +1070,42 @@ export class KNXGroupMonitor extends LitElement {
           `;
         },
       },
+
+      // Actions column
+      actions: {
+        showNarrow: true,
+        title: "",
+        type: "overflow-menu",
+        template: (row) => this._telegramRowMenu(row),
+      },
     }),
   );
+
+  /**
+   * Generates the row action menu for a telegram row
+   */
+  private _telegramRowMenu(row: TelegramRow): TemplateResult {
+    const items: IconOverflowMenuItem[] = [
+      {
+        path: mdiRobot,
+        label: this.knx.localize("group_monitor_telegram_menu_create_automation"),
+        action: () => this._createAutomationFromTelegram(row),
+      },
+    ];
+
+    return html`
+      <ha-icon-overflow-menu .hass=${this.hass} narrow .items=${items}></ha-icon-overflow-menu>
+    `;
+  }
+
+  /**
+   * Opens the HA automation editor prefilled with a knx.telegram trigger
+   * that matches the selected telegram row.
+   */
+  private _createAutomationFromTelegram(row: TelegramRow): void {
+    const config = buildAutomationFromTelegram(row, this.knx.localize);
+    openAutomationEditor(config, true);
+  }
 
   // ============================================================================
   // Render Helper Methods
