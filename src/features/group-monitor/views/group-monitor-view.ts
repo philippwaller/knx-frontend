@@ -29,12 +29,14 @@ import "../../../components/data-table/filter/knx-time-range-filter";
 
 import { customElement, property, query, state } from "lit/decorators";
 import { storage } from "@ha/common/decorators/storage";
+import { navigate } from "@ha/common/navigate";
 import {
   mdiClose,
   mdiDatabaseRemove,
   mdiDeleteSweep,
   mdiFastForward,
   mdiPause,
+  mdiPlus,
   mdiRefresh,
   mdiRobot,
 } from "@mdi/js";
@@ -64,6 +66,7 @@ import type {
 import type { TimeDeltaChangedEvent } from "../../../components/data-table/filter/knx-time-delta-filter";
 import type { TimeRangeChangedEvent } from "../../../components/data-table/filter/knx-time-range-filter";
 import { showKnxProjectUploadDialog } from "../../../dialogs/show-knx-project-upload-dialog";
+import { dptInClasses, stringToDpt } from "../../../utils/dpt";
 
 /** Persisted column layout (order + hidden columns) for one breakpoint. */
 interface StoredColumnLayout {
@@ -1086,6 +1089,16 @@ export class KNXGroupMonitor extends LitElement {
    * Generates the row action menu for a telegram row
    */
   private _telegramRowMenu(row: TelegramRow): TemplateResult {
+    return html`
+      <ha-icon-overflow-menu
+        .hass=${this.hass}
+        narrow
+        .items=${this._telegramRowMenuItems(row)}
+      ></ha-icon-overflow-menu>
+    `;
+  }
+
+  private _telegramRowMenuItems(row: TelegramRow): IconOverflowMenuItem[] {
     const items: IconOverflowMenuItem[] = [
       {
         path: mdiRobot,
@@ -1094,9 +1107,30 @@ export class KNXGroupMonitor extends LitElement {
       },
     ];
 
-    return html`
-      <ha-icon-overflow-menu .hass=${this.hass} narrow .items=${items}></ha-icon-overflow-menu>
-    `;
+    const dpt = row.dptId ? stringToDpt(row.dptId) : null;
+    if (!dpt) return items;
+
+    if (dpt.main === 1) {
+      items.push({
+        path: mdiPlus,
+        label: this.knx.localize("project_view_menu_create_binary_sensor"),
+        action: () =>
+          navigate(
+            `/knx/entities/create/binary_sensor?knx.ga_sensor.state=${row.destinationAddress}`,
+          ),
+      });
+    } else if (dptInClasses(dpt, ["numeric", "string"], this.knx.dptMetadata)) {
+      items.push({
+        path: mdiPlus,
+        label: this.knx.localize("project_view_menu_create_sensor"),
+        action: () =>
+          navigate(
+            `/knx/entities/create/sensor?knx.ga_sensor.state=${row.destinationAddress}&knx.ga_sensor.dpt=${row.dptId}`,
+          ),
+      });
+    }
+
+    return items;
   }
 
   /**
