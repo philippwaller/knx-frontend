@@ -43,7 +43,8 @@ import { showTelegramInfoDialog } from "../dialogs/show-telegram-info-dialog";
 import type { TelegramInfoDialogParams } from "../dialogs/telegram-info-dialog";
 import { formatTimeWithMilliseconds, formatTimeDelta, formatDate } from "../../../utils/format";
 import type { TelegramRow, TelegramRowKeys } from "../types/telegram-row";
-import { buildAutomationFromTelegram, openAutomationEditor } from "../utils/automation";
+import { openAutomationEditor } from "../../../utils/automation";
+import { buildAutomationFromTelegram } from "../utils/automation";
 import type { ToggleFilterEvent } from "../../../components/data-table/cell/knx-table-cell-filterable";
 import { GroupMonitorController, UNKNOWN_DPT_ID } from "../controller/group-monitor-controller";
 import type {
@@ -1088,7 +1089,7 @@ export class KNXGroupMonitor extends LitElement {
     const items: IconOverflowMenuItem[] = [
       {
         path: mdiRobot,
-        label: this.knx.localize("group_monitor_telegram_menu_create_automation"),
+        label: this.hass.localize("ui.panel.config.automation.picker.add_automation"),
         action: () => this._createAutomationFromTelegram(row),
       },
     ];
@@ -1103,7 +1104,7 @@ export class KNXGroupMonitor extends LitElement {
    * that matches the selected telegram row.
    */
   private _createAutomationFromTelegram(row: TelegramRow): void {
-    const config = buildAutomationFromTelegram(row, this.knx.localize);
+    const config = buildAutomationFromTelegram(row);
     openAutomationEditor(config, true);
   }
 

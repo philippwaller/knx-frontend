@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { formatDateTime } from "../../../utils/format";
 import { TelegramRow } from "../types/telegram-row";
-import { buildAutomationFromTelegram, openAutomationEditor } from "./automation";
+import { openAutomationEditor } from "../../../utils/automation";
+import { buildAutomationFromTelegram } from "./automation";
 
 describe("automation utilities", () => {
   const createTestTelegram = (overrides = {}) =>
@@ -26,7 +26,6 @@ describe("automation utilities", () => {
     it("builds a single mode automation with a knx.telegram trigger for GroupValueWrite Incoming", () => {
       const telegram = createTestTelegram();
       const config = buildAutomationFromTelegram(telegram);
-      const expectedDateTime = formatDateTime(telegram.timestamp);
 
       expect(config.mode).toBe("single");
       expect(config.alias).toBe("KNX: 1/2/3 Ceiling Light");
@@ -38,12 +37,8 @@ describe("automation utilities", () => {
       const trigger = (config.triggers as any[])[0];
       expect(trigger.trigger).toBe("knx.telegram");
       expect(trigger.destination).toBe("1/2/3");
-      expect(trigger.alias).toBe(
-        "a KNX telegram (GroupValueWrite) is received for 1/2/3 (Ceiling Light)",
-      );
-      expect(trigger.note).toBe(
-        `Created from KNX telegram (${expectedDateTime})\nSource: 1.1.1 (Living Room Switch)\nDestination: 1/2/3 (Ceiling Light)\nType: GroupValueWrite (Incoming)\nValue: On (DPT 1.001 switch)`,
-      );
+      expect(trigger.alias).toBeUndefined();
+      expect(trigger.note).toBeUndefined();
       expect(trigger.group_value_read).toBe(false);
       expect(trigger.group_value_response).toBe(false);
       expect(trigger.outgoing).toBe(false);
@@ -66,13 +61,10 @@ describe("automation utilities", () => {
 
       const config = buildAutomationFromTelegram(telegram);
       const trigger = (config.triggers as any[])[0];
-      const expectedDateTime = formatDateTime(telegram.timestamp);
 
-      expect(config.alias).toBe("KNX: 1/2/3 (GroupValueRead) (Outgoing)");
-      expect(trigger.alias).toBe("a KNX telegram (GroupValueRead) is sent for 1/2/3");
-      expect(trigger.note).toBe(
-        `Created from KNX telegram (${expectedDateTime})\nSource: 1.1.1\nDestination: 1/2/3\nType: GroupValueRead (Outgoing)`,
-      );
+      expect(config.alias).toBe("KNX: 1/2/3");
+      expect(trigger.alias).toBeUndefined();
+      expect(trigger.note).toBeUndefined();
       expect(trigger.trigger).toBe("knx.telegram");
       expect(trigger.group_value_write).toBe(false);
       expect(trigger.group_value_response).toBe(false);
@@ -82,7 +74,7 @@ describe("automation utilities", () => {
       expect(config.description).toBe("");
     });
 
-    it("passes dptId to trigger type and formats DPT in note", () => {
+    it("passes dptId to trigger type", () => {
       const telegram = createTestTelegram({
         dpt_main: 1,
         dpt_sub: 1,
@@ -94,11 +86,11 @@ describe("automation utilities", () => {
       const trigger = (config.triggers as any[])[0];
 
       expect(trigger.type).toBe("1.001");
-      expect(trigger.note).toContain(`DPT: DPT 1.001`);
+      expect(trigger.note).toBeUndefined();
       expect(config.description).toBe("");
     });
 
-    it("formats note with value but without DPT when DPT is unknown", () => {
+    it("does not add a DPT filter when it is unknown", () => {
       const telegram = createTestTelegram({
         dpt_main: null,
         dpt_sub: null,
@@ -109,8 +101,7 @@ describe("automation utilities", () => {
       const config = buildAutomationFromTelegram(telegram);
       const trigger = (config.triggers as any[])[0];
 
-      expect(trigger.note).toContain("\nValue: 0x01");
-      expect(trigger.note).not.toContain("\nValue: 0x01 (");
+      expect(trigger.type).toBeUndefined();
       expect(config.description).toBe("");
     });
 
@@ -122,72 +113,36 @@ describe("automation utilities", () => {
       const config = buildAutomationFromTelegram(telegram);
       const trigger = (config.triggers as any[])[0];
 
-      expect(config.alias).toBe("KNX: 1/2/3 Ceiling Light (GroupValueResponse)");
+      expect(config.alias).toBe("KNX: 1/2/3 Ceiling Light");
       expect(trigger.group_value_write).toBe(false);
       expect(trigger.group_value_read).toBe(false);
       expect(trigger.group_value_response).toBeUndefined();
     });
 
-    it("uses custom localize function if provided", () => {
+    it("uses the destination name in the automation alias", () => {
       const telegram = createTestTelegram();
-      const mockTranslations: Record<string, string> = {
-        group_monitor_automation_description_type: "Typ",
-        group_monitor_automation_description_direction: "Richtung",
-        group_monitor_automation_description_source: "Quelle",
-        group_monitor_automation_description_destination: "Ziel",
-        group_monitor_automation_description_dpt: "DPT",
-        group_monitor_automation_trigger_alias_incoming:
-          "ein KNX-Telegramm ({type}) an {destination} empfangen wird",
-        group_monitor_automation_trigger_alias_outgoing:
-          "ein KNX-Telegramm ({type}) an {destination} gesendet wird",
-        group_monitor_automation_note_created_from: "Erstellt aus KNX-Telegramm ({time})",
-        group_monitor_automation_note_value: "Wert",
-        Incoming: "Eingehend",
-        Outgoing: "Ausgehend",
-      };
-      const localize = vi.fn((key: string, values?: Record<string, any>) => {
-        let text = mockTranslations[key] || key;
-        if (values) {
-          for (const [k, v] of Object.entries(values)) {
-            text = text.replace(`{${k}}`, String(v));
-          }
-        }
-        return text;
-      });
-      const config = buildAutomationFromTelegram(telegram, localize);
+      const config = buildAutomationFromTelegram(telegram);
       const trigger = (config.triggers as any[])[0];
-      const expectedDateTime = formatDateTime(telegram.timestamp);
 
       expect(config.alias).toBe("KNX: 1/2/3 Ceiling Light");
       expect(config.description).toBe("");
-      expect(trigger.alias).toBe(
-        "ein KNX-Telegramm (GroupValueWrite) an 1/2/3 (Ceiling Light) empfangen wird",
-      );
-      expect(trigger.note).toBe(
-        `Erstellt aus KNX-Telegramm (${expectedDateTime})\nQuelle: 1.1.1 (Living Room Switch)\nZiel: 1/2/3 (Ceiling Light)\nTyp: GroupValueWrite (Eingehend)\nWert: On (DPT 1.001 switch)`,
-      );
-
-      // Localized read outgoing
-      const readTelegram = createTestTelegram({
-        telegramtype: "GroupValueRead",
-        direction: "Outgoing",
-      });
-      const readConfig = buildAutomationFromTelegram(readTelegram, localize);
-      expect(readConfig.alias).toBe("KNX: 1/2/3 Ceiling Light (GroupValueRead) (Ausgehend)");
+      expect(trigger.alias).toBeUndefined();
+      expect(trigger.note).toBeUndefined();
     });
   });
 
   describe("openAutomationEditor", () => {
-    it("dispatches hass-automation-editor event on parent customPanel if present", () => {
+    it("dispatches hass-automation-editor event on the parent custom panel", () => {
       const fakePanel = document.createElement("div");
       const dispatchSpy = vi.spyOn(fakePanel, "dispatchEvent");
+      const windowDispatchSpy = vi.spyOn(window, "dispatchEvent");
       (window.parent as any).customPanel = fakePanel;
 
       const dummyConfig = { alias: "Test" };
-      const result = openAutomationEditor(dummyConfig, true);
+      openAutomationEditor(dummyConfig, true);
 
-      expect(result).toBe(true);
       expect(dispatchSpy).toHaveBeenCalled();
+      expect(windowDispatchSpy).not.toHaveBeenCalled();
       const event = dispatchSpy.mock.calls[0][0] as CustomEvent;
       expect(event.type).toBe("hass-automation-editor");
       expect(event.detail).toEqual({
@@ -196,6 +151,14 @@ describe("automation utilities", () => {
       });
 
       delete (window.parent as any).customPanel;
+    });
+
+    it("does nothing until the parent custom panel is available", () => {
+      const windowDispatchSpy = vi.spyOn(window, "dispatchEvent");
+
+      openAutomationEditor({ alias: "Test" }, true);
+
+      expect(windowDispatchSpy).not.toHaveBeenCalled();
     });
   });
 });

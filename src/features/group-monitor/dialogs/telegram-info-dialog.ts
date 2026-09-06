@@ -23,7 +23,8 @@ import {
   formatIsoTimestampWithMicroseconds,
 } from "../../../utils/format";
 import type { TelegramRow } from "../types/telegram-row";
-import { buildAutomationFromTelegram, openAutomationEditor } from "../utils/automation";
+import { openAutomationEditor } from "../../../utils/automation";
+import { buildAutomationFromTelegram } from "../utils/automation";
 
 /**
  * Parameters for TelegramInfoDialog
@@ -319,10 +320,10 @@ export class GroupMonitorTelegramInfoDialog
             appearance="filled"
             variant="brand"
             @click=${this._createAutomation}
-            .title=${this.knx.localize("group_monitor_telegram_menu_create_automation")}
+            .title=${this.hass.localize("ui.panel.config.automation.picker.add_automation")}
           >
             <ha-svg-icon .path=${mdiRobot} slot="start"></ha-svg-icon>
-            ${this.knx.localize("group_monitor_telegram_menu_create_automation")}
+            ${this.hass.localize("ui.panel.config.automation.picker.add_automation")}
           </ha-button>
         </div>
       </ha-dialog>
@@ -334,7 +335,7 @@ export class GroupMonitorTelegramInfoDialog
    */
   private _createAutomation(): void {
     if (!this._params) return;
-    const config = buildAutomationFromTelegram(this._params.telegram, this.knx.localize);
+    const config = buildAutomationFromTelegram(this._params.telegram);
     openAutomationEditor(config, true);
     this.closeDialog();
   }

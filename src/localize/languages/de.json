@@ -147,19 +147,5 @@
   "group_monitor_time_delta_before": "- Vorher (ms)",
   "group_monitor_time_delta_after": "+ Nachher (ms)",
   "group_monitor_time_delta_disabled": "Filter setzen, um die Kontextzeitspanne zu nutzen.",
-  "group_monitor_time_delta_summary": "Innerhalb -{before} ms / +{after} ms",
-  "group_monitor_telegram_menu_create_automation": "Automation erstellen",
-  "group_monitor_automation_description_telegram": "KNX Telegramm",
-  "group_monitor_automation_description_type": "Typ",
-  "group_monitor_automation_description_source": "Quelle",
-  "group_monitor_automation_description_destination": "Ziel",
-  "group_monitor_automation_description_direction": "Richtung",
-  "group_monitor_automation_description_dpt": "DPT",
-  "group_monitor_automation_note_created_from": "Erstellt aus KNX-Telegramm ({time})",
-  "group_monitor_automation_note_value": "Wert",
-  "group_monitor_automation_description_header_trigger": "Auslöser",
-  "group_monitor_automation_description_triggers_when_incoming": "Löst aus, wenn ein KNX-Telegramm ({details}) an {destination} empfangen wird.",
-  "group_monitor_automation_description_triggers_when_outgoing": "Löst aus, wenn ein KNX-Telegramm ({details}) an {destination} gesendet wird.",
-  "group_monitor_automation_trigger_alias_incoming": "ein KNX-Telegramm ({type}) an {destination} empfangen wird",
-  "group_monitor_automation_trigger_alias_outgoing": "ein KNX-Telegramm ({type}) an {destination} gesendet wird"
+  "group_monitor_time_delta_summary": "Innerhalb -{before} ms / +{after} ms"
 }
