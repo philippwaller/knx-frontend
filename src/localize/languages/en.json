@@ -147,19 +147,5 @@
   "group_monitor_time_delta_before": "- Before (ms)",
   "group_monitor_time_delta_after": "+ After (ms)",
   "group_monitor_time_delta_disabled": "Set a filter to use the context time span.",
-  "group_monitor_time_delta_summary": "Within -{before} ms / +{after} ms",
-  "group_monitor_telegram_menu_create_automation": "Create automation",
-  "group_monitor_automation_description_telegram": "KNX telegram",
-  "group_monitor_automation_description_type": "Type",
-  "group_monitor_automation_description_source": "Source",
-  "group_monitor_automation_description_destination": "Destination",
-  "group_monitor_automation_description_direction": "Direction",
-  "group_monitor_automation_description_dpt": "DPT",
-  "group_monitor_automation_note_created_from": "Created from KNX telegram ({time})",
-  "group_monitor_automation_note_value": "Value",
-  "group_monitor_automation_description_header_trigger": "Trigger",
-  "group_monitor_automation_description_triggers_when_incoming": "Triggers when a KNX telegram ({details}) is received for {destination}.",
-  "group_monitor_automation_description_triggers_when_outgoing": "Triggers when a KNX telegram ({details}) is sent for {destination}.",
-  "group_monitor_automation_trigger_alias_incoming": "a KNX telegram ({type}) is received for {destination}",
-  "group_monitor_automation_trigger_alias_outgoing": "a KNX telegram ({type}) is sent for {destination}"
+  "group_monitor_time_delta_summary": "Within -{before} ms / +{after} ms"
 }

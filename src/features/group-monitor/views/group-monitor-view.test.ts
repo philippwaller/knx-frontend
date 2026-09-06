@@ -136,12 +136,4 @@ describe("KNXGroupMonitor", () => {
       expect(migrateStoredColumns(undefined)).toBeUndefined();
     });
   });
-
-  describe("actions column", () => {
-    it("includes an actions column with type overflow-menu", () => {
-      const columns = (element as any)._columns(false, true, "en");
-      expect(columns.actions).toBeDefined();
-      expect(columns.actions.type).toBe("overflow-menu");
-    });
-  });
 });
