@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "lit";
 import { TelegramRow } from "../types/telegram-row";
 import { KNXGroupMonitor, migrateStoredColumns } from "./group-monitor-view";
@@ -27,6 +27,10 @@ describe("KNXGroupMonitor", () => {
       connected: true,
       localize: vi.fn((key) => key),
     } as any;
+  });
+
+  afterEach(() => {
+    delete (window.parent as { customPanel?: HTMLElement }).customPanel;
   });
 
   it("opens the ETS project upload dialog from the missing-project alert", () => {
@@ -184,6 +188,43 @@ describe("KNXGroupMonitor", () => {
         label: "ui.panel.config.generic.headers.actions",
         lastFixed: true,
         type: "overflow-menu",
+      });
+    });
+
+    it("opens the automation editor from a row action", () => {
+      const row = new TelegramRow({
+        timestamp: "2026-09-06T12:00:00Z",
+        source: "1.1.1",
+        source_name: "",
+        destination: "1/2/3",
+        destination_name: "Ceiling Light",
+        telegramtype: "GroupValueWrite",
+        direction: "Incoming",
+        payload: [1],
+        dpt_main: null,
+        dpt_sub: null,
+        dpt_name: null,
+        value: "On",
+        unit: null,
+      });
+      const customPanel = document.createElement("div");
+      let editorEvent: CustomEvent | undefined;
+      customPanel.addEventListener("hass-automation-editor", (event) => {
+        editorEvent = event as CustomEvent;
+      });
+      (window.parent as { customPanel?: HTMLElement }).customPanel = customPanel;
+      const container = document.createElement("div");
+      const columns = (element as any)._columns(false, true, "en");
+
+      render(columns.actions.template(row), container, { host: element });
+      const menu = container.querySelector("ha-icon-overflow-menu") as HTMLElement & {
+        items: { action: () => void }[];
+      };
+      menu.items[0].action();
+
+      expect(editorEvent?.detail.data).toMatchObject({
+        alias: "KNX: 1/2/3 Ceiling Light",
+        triggers: [{ trigger: "knx.telegram", options: { destination: ["1/2/3"] } }],
       });
     });
 
