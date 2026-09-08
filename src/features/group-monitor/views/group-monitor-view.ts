@@ -1077,8 +1077,10 @@ export class KNXGroupMonitor extends LitElement {
 
       // Actions column
       actions: {
+        lastFixed: true,
         showNarrow: true,
         title: "",
+        label: this.hass.localize("ui.panel.config.generic.headers.actions"),
         type: "overflow-menu",
         template: (row) => this._telegramRowMenu(row),
       },

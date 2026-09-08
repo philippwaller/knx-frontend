@@ -312,9 +312,11 @@ export class KNXProjectView extends LitElement {
           title: "Exposes",
         },
         actions: {
+          lastFixed: true,
           showNarrow: true,
           defaultHidden: narrow,
           title: "",
+          label: this.hass.localize("ui.panel.config.generic.headers.actions"),
           type: "overflow-menu",
           template: (ga: GroupAddress) => this._groupAddressMenu(ga),
         },
@@ -340,9 +342,8 @@ export class KNXProjectView extends LitElement {
       action: () => {
         openAutomationEditor(
           buildAutomationFromKnx({
-            alias: `KNX: ${groupAddress.address}${groupAddress.name ? ` ${groupAddress.name}` : ""}`,
             destination: groupAddress.address,
-            ...(groupAddress.dpt ? { type: dptToString(groupAddress.dpt) } : {}),
+            destinationName: groupAddress.name,
           }),
         );
       },

@@ -178,19 +178,22 @@ describe("KNXGroupMonitor", () => {
   });
 
   describe("actions column", () => {
-    it("includes an actions column with type overflow-menu", () => {
+    it("keeps the labeled actions column fixed at the end", () => {
       const columns = (element as any)._columns(false, true, "en");
-      expect(columns.actions).toBeDefined();
-      expect(columns.actions.type).toBe("overflow-menu");
+      expect(columns.actions).toMatchObject({
+        label: "ui.panel.config.generic.headers.actions",
+        lastFixed: true,
+        type: "overflow-menu",
+      });
     });
 
     it("offers a binary sensor for DPT 1 telegrams", () => {
       const row = new TelegramRow({
         timestamp: "2026-09-06T12:00:00Z",
         source: "1.1.1",
-        source_name: null,
+        source_name: "",
         destination: "1/2/3",
-        destination_name: null,
+        destination_name: "",
         telegramtype: "GroupValueWrite",
         direction: "Incoming",
         payload: [1],
@@ -220,9 +223,9 @@ describe("KNXGroupMonitor", () => {
       const row = new TelegramRow({
         timestamp: "2026-09-06T12:00:00Z",
         source: "1.1.1",
-        source_name: null,
+        source_name: "",
         destination: "1/2/3",
-        destination_name: null,
+        destination_name: "",
         telegramtype: "GroupValueWrite",
         direction: "Incoming",
         payload: [1],

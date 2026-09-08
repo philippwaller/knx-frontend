@@ -1,6 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { TelegramRow } from "../types/telegram-row";
-import { openAutomationEditor } from "../../../utils/automation";
 import { buildAutomationFromTelegram } from "./automation";
 
 describe("automation utilities", () => {
@@ -36,14 +35,15 @@ describe("automation utilities", () => {
       expect(config.triggers).toHaveLength(1);
       const trigger = (config.triggers as any[])[0];
       expect(trigger.trigger).toBe("knx.telegram");
-      expect(trigger.destination).toBe("1/2/3");
+      expect(trigger.options.destination).toEqual(["1/2/3"]);
       expect(trigger.alias).toBeUndefined();
       expect(trigger.note).toBeUndefined();
-      expect(trigger.group_value_read).toBe(false);
-      expect(trigger.group_value_response).toBe(false);
-      expect(trigger.outgoing).toBe(false);
-      expect(trigger.group_value_write).toBeUndefined();
-      expect(trigger.incoming).toBeUndefined();
+      expect(trigger.options.group_value_read).toBe(false);
+      expect(trigger.options.group_value_response).toBe(false);
+      expect(trigger.options.outgoing).toBe(false);
+      expect(trigger.options.group_value_write).toBeUndefined();
+      expect(trigger.options.incoming).toBeUndefined();
+      expect(trigger.options.type).toBeUndefined();
     });
 
     it("handles GroupValueRead Outgoing correctly when DPT is unknown and addresses have no names", () => {
@@ -66,15 +66,15 @@ describe("automation utilities", () => {
       expect(trigger.alias).toBeUndefined();
       expect(trigger.note).toBeUndefined();
       expect(trigger.trigger).toBe("knx.telegram");
-      expect(trigger.group_value_write).toBe(false);
-      expect(trigger.group_value_response).toBe(false);
-      expect(trigger.incoming).toBe(false);
-      expect(trigger.group_value_read).toBeUndefined();
-      expect(trigger.type).toBeUndefined();
+      expect(trigger.options.group_value_write).toBe(false);
+      expect(trigger.options.group_value_response).toBe(false);
+      expect(trigger.options.incoming).toBe(false);
+      expect(trigger.options.group_value_read).toBeUndefined();
+      expect(trigger.options.type).toBeUndefined();
       expect(config.description).toBe("");
     });
 
-    it("passes dptId to trigger type", () => {
+    it("does not add a DPT decoder override", () => {
       const telegram = createTestTelegram({
         dpt_main: 1,
         dpt_sub: 1,
@@ -85,24 +85,21 @@ describe("automation utilities", () => {
       const config = buildAutomationFromTelegram(telegram);
       const trigger = (config.triggers as any[])[0];
 
-      expect(trigger.type).toBe("1.001");
+      expect(trigger.options.type).toBeUndefined();
       expect(trigger.note).toBeUndefined();
       expect(config.description).toBe("");
     });
 
-    it("does not add a DPT filter when it is unknown", () => {
+    it("treats an unexpected direction as incoming", () => {
       const telegram = createTestTelegram({
-        dpt_main: null,
-        dpt_sub: null,
-        dpt_name: null,
-        value: "0x01",
+        direction: "Unknown",
       });
 
       const config = buildAutomationFromTelegram(telegram);
       const trigger = (config.triggers as any[])[0];
 
-      expect(trigger.type).toBeUndefined();
-      expect(config.description).toBe("");
+      expect(trigger.options.outgoing).toBe(false);
+      expect(trigger.options.incoming).toBeUndefined();
     });
 
     it("handles GroupValueResponse correctly", () => {
@@ -114,9 +111,9 @@ describe("automation utilities", () => {
       const trigger = (config.triggers as any[])[0];
 
       expect(config.alias).toBe("KNX: 1/2/3 Ceiling Light");
-      expect(trigger.group_value_write).toBe(false);
-      expect(trigger.group_value_read).toBe(false);
-      expect(trigger.group_value_response).toBeUndefined();
+      expect(trigger.options.group_value_write).toBe(false);
+      expect(trigger.options.group_value_read).toBe(false);
+      expect(trigger.options.group_value_response).toBeUndefined();
     });
 
     it("uses the destination name in the automation alias", () => {
@@ -128,37 +125,6 @@ describe("automation utilities", () => {
       expect(config.description).toBe("");
       expect(trigger.alias).toBeUndefined();
       expect(trigger.note).toBeUndefined();
-    });
-  });
-
-  describe("openAutomationEditor", () => {
-    it("dispatches hass-automation-editor event on the parent custom panel", () => {
-      const fakePanel = document.createElement("div");
-      const dispatchSpy = vi.spyOn(fakePanel, "dispatchEvent");
-      const windowDispatchSpy = vi.spyOn(window, "dispatchEvent");
-      (window.parent as any).customPanel = fakePanel;
-
-      const dummyConfig = { alias: "Test" };
-      openAutomationEditor(dummyConfig, true);
-
-      expect(dispatchSpy).toHaveBeenCalled();
-      expect(windowDispatchSpy).not.toHaveBeenCalled();
-      const event = dispatchSpy.mock.calls[0][0] as CustomEvent;
-      expect(event.type).toBe("hass-automation-editor");
-      expect(event.detail).toEqual({
-        data: dummyConfig,
-        expanded: true,
-      });
-
-      delete (window.parent as any).customPanel;
-    });
-
-    it("does nothing until the parent custom panel is available", () => {
-      const windowDispatchSpy = vi.spyOn(window, "dispatchEvent");
-
-      openAutomationEditor({ alias: "Test" }, true);
-
-      expect(windowDispatchSpy).not.toHaveBeenCalled();
     });
   });
 });

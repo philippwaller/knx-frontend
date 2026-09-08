@@ -1,10 +1,11 @@
 import { fireEvent } from "@ha/common/dom/fire_event";
 import type { AutomationConfig } from "@ha/data/automation";
+import { KNXLogger } from "../tools/knx-logger";
 
-export interface KnxTelegramTrigger {
-  trigger: "knx.telegram";
-  destination: string;
-  type?: string;
+const logger = new KNXLogger("automation");
+
+export interface KnxTelegramTriggerOptions {
+  destination: string[];
   group_value_write?: boolean;
   group_value_read?: boolean;
   group_value_response?: boolean;
@@ -12,19 +13,26 @@ export interface KnxTelegramTrigger {
   outgoing?: boolean;
 }
 
-export interface KnxAutomationOptions extends Omit<KnxTelegramTrigger, "trigger"> {
-  alias?: string;
+export interface KnxAutomationOptions extends Omit<KnxTelegramTriggerOptions, "destination"> {
+  destination: string;
+  destinationName?: string;
 }
 
 export function buildAutomationFromKnx({
-  alias,
-  ...trigger
+  destination,
+  destinationName,
+  ...options
 }: KnxAutomationOptions): Partial<AutomationConfig> {
   return {
-    alias: alias ?? `KNX: ${trigger.destination}`,
+    alias: `KNX: ${destination}${destinationName ? ` ${destinationName}` : ""}`,
     description: "",
     mode: "single",
-    triggers: [{ trigger: "knx.telegram", ...trigger } as KnxTelegramTrigger],
+    triggers: [
+      {
+        trigger: "knx.telegram",
+        options: { destination: [destination], ...options },
+      },
+    ],
     conditions: [],
     actions: [],
   };
@@ -32,7 +40,9 @@ export function buildAutomationFromKnx({
 
 export function openAutomationEditor(data: Partial<AutomationConfig>, expanded = true): void {
   const customPanel = (window.parent as { customPanel?: HTMLElement }).customPanel;
-  if (customPanel) {
-    fireEvent(customPanel, "hass-automation-editor", { data, expanded });
+  if (!customPanel) {
+    logger.warn("Cannot open automation editor: parent custom panel not available");
+    return;
   }
+  fireEvent(customPanel, "hass-automation-editor", { data, expanded });
 }

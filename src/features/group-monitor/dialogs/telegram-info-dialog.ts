@@ -316,12 +316,7 @@ export class GroupMonitorTelegramInfoDialog
               <ha-svg-icon .path=${mdiArrowRight} slot="end"></ha-svg-icon>
             </ha-button>
           </div>
-          <ha-button
-            appearance="filled"
-            variant="brand"
-            @click=${this._createAutomation}
-            .title=${this.hass.localize("ui.panel.config.automation.picker.add_automation")}
-          >
+          <ha-button appearance="filled" @click=${this._createAutomation}>
             <ha-svg-icon .path=${mdiRobot} slot="start"></ha-svg-icon>
             ${this.hass.localize("ui.panel.config.automation.picker.add_automation")}
           </ha-button>
