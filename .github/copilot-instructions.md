@@ -197,7 +197,7 @@ import { KNXLogger } from "../tools/knx-logger";
 
 1. **Reuse HA Components**: Prefer existing `<ha-*>` components over custom ones
 2. **Mobile-First**: Responsive design
-3. **Localize Everything**: No hardcoded strings, use translation keys
+3. **Localize Everything (Prefer Backend)**: No hardcoded UI strings. Always prefer Home Assistant backend/core translations (`this.hass.localize()`) over repo-local keys (`this.knx.localize()`). Always verify whether a suitable backend string exists before creating a new frontend translation key.
 4. **KNX Terminology**: Use "Group Address" not "GA", "telegram" for messages
 5. **WebSocket First**: Use integration's WS commands for all backend communication
 6. **Type Safety**: Define interfaces for all KNX data structures
@@ -220,3 +220,4 @@ import { KNXLogger } from "../tools/knx-logger";
 - **Memory Management**: Clean up subscriptions and event listeners
 - **Mobile Responsive**: Ensure components work on small screens
 - **Error States**: Handle loading, error, and unavailable states properly
+- **Redundant Frontend Translations**: Adding keys to `src/localize/` when equivalent strings already exist in Home Assistant backend translations (`this.hass.localize()`)
