@@ -1,6 +1,6 @@
 {
   "title": "KNX Frontend Gallery",
-  "subtitle": "For the Home Assistant KNX integration",
+  "subtitle": "For the Home Assistant KNX integration (preview test)",
   "preview": "Component preview",
   "separator": "Separator",
   "failed": "The component preview could not be loaded.",
