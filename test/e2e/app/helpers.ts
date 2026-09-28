@@ -3,6 +3,9 @@ import { expect, type Page } from "@playwright/test";
 import { NAVIGATION_TIMEOUT, PANEL_TIMEOUT } from "../helpers";
 import type { ScenarioName } from "./src/scenarios";
 
+/** How long the WebSocket connection must be quiet before we trust `__unmockedCalls`. */
+const WS_IDLE_MS = 1_000;
+
 /** Opens a KNX panel route in the harness and waits until the fake `hass` exists. */
 export const goToKnxRoute = async (
   page: Page,
@@ -33,5 +36,28 @@ export const expectKnxViewReady = async (page: Page, viewTag: string) => {
   ).toHaveCount(0);
 };
 
+/**
+ * Waits until no WebSocket command is in flight and none has started or settled for
+ * `WS_IDLE_MS`. Some views (for example the group monitor) send their first commands only after
+ * async work like an IndexedDB restore, once after the view itself is already rendered, so a
+ * single readiness check can race ahead of a rejection that would otherwise reveal a missing
+ * mock.
+ */
+export const waitForWebSocketIdle = async (page: Page) => {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((idleMs) => {
+          const activity = window.__wsActivity;
+          return activity.inFlight === 0 && performance.now() - activity.lastActivity >= idleMs;
+        }, WS_IDLE_MS),
+      { timeout: PANEL_TIMEOUT, intervals: [250] },
+    )
+    .toBe(true);
+};
+
 /** WebSocket command types the page sent without a registered mock. */
-export const unmockedCalls = (page: Page) => page.evaluate(() => [...window.__unmockedCalls]);
+export const unmockedCalls = async (page: Page) => {
+  await waitForWebSocketIdle(page);
+  return page.evaluate(() => [...window.__unmockedCalls]);
+};
