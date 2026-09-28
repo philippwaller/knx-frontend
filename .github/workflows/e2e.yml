@@ -1,0 +1,167 @@
+name: E2E
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  NODE_OPTIONS: --max_old_space_size=6144
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Build the test app once and share it with the test jobs ─────────────────
+  build:
+    name: Build e2e test app
+    runs-on: ubuntu-latest
+    outputs:
+      playwright-version: ${{ steps.playwright.outputs.version }}
+    steps:
+      - name: Check out files from GitHub
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Node and Dependencies
+        uses: ./.github/actions/setup
+
+      # The test jobs run in the Playwright container of exactly this version, so browsers and
+      # library always match. It changes only through script/upgrade-frontend.
+      - name: Read Playwright version
+        id: playwright
+        run: |
+          version=$(node test/e2e/playwright-version.mjs)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Restore only: the Build job in ci.yml saves this cache on main.
+      - name: Restore babel-loader cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/babel-loader
+          key: babel-loader-${{ runner.os }}-${{ hashFiles('yarn.lock') }}-${{ github.sha }}
+          restore-keys: babel-loader-${{ runner.os }}-${{ hashFiles('yarn.lock') }}-
+
+      - name: Build e2e test app
+        run: yarn gulp build-e2e-test-app-e2e
+        env:
+          BABEL_CACHE_DIR: ${{ runner.temp }}/babel-loader
+
+      - name: Upload e2e test app build
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-test-app-dist
+          path: test/e2e/app/dist/
+          if-no-files-found: error
+          retention-days: 3
+
+  # ── Run the Playwright tests in the matching Playwright container ───────────
+  e2e-app:
+    name: E2E app (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.build.outputs.playwright-version }}-noble
+      options: --user 1001 --ipc=host
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex:
+          - 1
+          - 2
+        shardTotal:
+          - 2
+    steps:
+      - name: Check out files from GitHub
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Node and Dependencies
+        uses: ./.github/actions/setup
+        with:
+          cache-key-prefix: knx-frontend-deps-container
+
+      - name: Download e2e test app build
+        uses: actions/download-artifact@v8
+        with:
+          name: e2e-test-app-dist
+          path: test/e2e/app/dist/
+
+      - name: Run Playwright app tests
+        run: yarn test:e2e:app --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+        timeout-minutes: 15
+
+      - name: Upload app blob report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: blob-report-app-${{ matrix.shardIndex }}
+          path: test/e2e/reports/app/
+          if-no-files-found: warn
+          retention-days: 3
+
+  # ── Merge the shard reports, publish them and gate the workflow ─────────────
+  report:
+    name: Report
+    needs: e2e-app
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - name: Check out files from GitHub
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Node and Dependencies
+        uses: ./.github/actions/setup
+
+      - name: Download app blob reports
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: blob-report-app-*
+          path: test/e2e/reports/app/
+
+      - name: Stage blobs for merge
+        run: node test/e2e/collect-blob-reports.mjs app
+
+      - name: Merge blob reports
+        run: yarn playwright merge-reports -c test/e2e/playwright.merge.config.ts test/e2e/reports/blob
+
+      - name: Upload merged HTML report
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: test/e2e/reports/combined/
+          retention-days: 14
+
+      # Failed tests appear in the Codecov pull request comment. Codecov accepts uploads from
+      # fork pull requests without the token. An upload problem must not hide the test result,
+      # which the last step reports.
+      - name: Upload test results to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: ./test/e2e/reports/junit.xml
+          flags: e2e
+          fail_ci_if_error: false
+
+      - name: Check test results
+        run: |
+          echo "E2E app: ${{ needs.e2e-app.result }}"
+          [ "${{ needs.e2e-app.result }}" = "success" ]

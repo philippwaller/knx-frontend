@@ -1,6 +1,12 @@
 name: 'Setup Node.js and Install Dependencies'
 description: 'Set up Node.js environment and install project dependencies with caching'
 
+inputs:
+  cache-key-prefix:
+    description: 'Prefix of the dependency cache key. Jobs running in another environment, such as a container, need their own.'
+    required: false
+    default: 'knx-frontend-deps'
+
 runs:
   using: 'composite'
   steps:
@@ -18,10 +24,10 @@ runs:
           .yarn/cache
           .yarn/install-state.gz
           node_modules
-        key: knx-frontend-deps-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('yarn.lock') }}
+        key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('yarn.lock') }}
         restore-keys: |
-          knx-frontend-deps-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-
-          knx-frontend-deps-${{ runner.os }}-
+          ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-
+          ${{ inputs.cache-key-prefix }}-${{ runner.os }}-
 
     - name: Install dependencies
       shell: bash
