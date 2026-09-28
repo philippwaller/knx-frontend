@@ -1,10 +1,16 @@
 import { expect, type Page } from "@playwright/test";
 
 import { NAVIGATION_TIMEOUT, PANEL_TIMEOUT } from "../helpers";
+import type { ScenarioName } from "./src/scenarios";
 
 /** Opens a KNX panel route in the harness and waits until the fake `hass` exists. */
-export const goToKnxRoute = async (page: Page, path: string) => {
-  await page.goto(`/knx/${path}`, { timeout: NAVIGATION_TIMEOUT });
+export const goToKnxRoute = async (
+  page: Page,
+  path: string,
+  scenario: ScenarioName = "default",
+) => {
+  const query = scenario === "default" ? "" : `?scenario=${scenario}`;
+  await page.goto(`/knx/${path}${query}`, { timeout: NAVIGATION_TIMEOUT });
   await page.waitForFunction(() => window.__mockHass !== undefined, undefined, {
     timeout: NAVIGATION_TIMEOUT,
   });
@@ -26,3 +32,6 @@ export const expectKnxViewReady = async (page: Page, viewTag: string) => {
     "no error page is shown",
   ).toHaveCount(0);
 };
+
+/** WebSocket command types the page sent without a registered mock. */
+export const unmockedCalls = (page: Page) => page.evaluate(() => [...window.__unmockedCalls]);

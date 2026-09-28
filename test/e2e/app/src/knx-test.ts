@@ -5,8 +5,9 @@ import type { MockHomeAssistant } from "@ha/fake_data/provide_hass";
 import { provideHass } from "@ha/fake_data/provide_hass";
 import type { Route } from "@ha/types";
 
-import { defaultFixtures } from "./fixtures";
 import { registerMocks } from "./mock-ws";
+import { resolveScenario } from "./scenarios";
+import { trackUnmockedCalls } from "./unmocked-calls";
 
 declare global {
   interface Window {
@@ -77,9 +78,10 @@ export class KnxTest extends LitElement {
   }
 
   private _initializeHass() {
-    const fixtures = defaultFixtures();
+    const fixtures = resolveScenario(new URLSearchParams(location.search).get("scenario"));
     // `false`: <knx-frontend> provides the HA contexts itself through contextMixin.
     const hass = provideHass(this, { panelUrl: "knx" }, true, false);
+    trackUnmockedCalls(hass);
     registerMocks(hass, fixtures);
     hass.updateStates(fixtures.states);
     window.__mockHass = hass;
