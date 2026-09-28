@@ -39,7 +39,7 @@ export const expectKnxViewReady = async (page: Page, viewTag: string) => {
 /**
  * Waits until no WebSocket command is in flight and none has started or settled for
  * `WS_IDLE_MS`. Some views (for example the group monitor) send their first commands only after
- * async work like an IndexedDB restore, once after the view itself is already rendered, so a
+ * async work like an IndexedDB restore, once the view itself is already rendered, so a
  * single readiness check can race ahead of a rejection that would otherwise reveal a missing
  * mock.
  */
@@ -49,11 +49,13 @@ export const waitForWebSocketIdle = async (page: Page) => {
       () =>
         page.evaluate((idleMs) => {
           const activity = window.__wsActivity;
-          return activity.inFlight === 0 && performance.now() - activity.lastActivity >= idleMs;
+          const idle =
+            activity.inFlight === 0 && performance.now() - activity.lastActivity >= idleMs;
+          return idle ? "idle" : `WebSocket stays busy (in flight: ${activity.inFlight})`;
         }, WS_IDLE_MS),
       { timeout: PANEL_TIMEOUT, intervals: [250] },
     )
-    .toBe(true);
+    .toBe("idle");
 };
 
 /** WebSocket command types the page sent without a registered mock. */

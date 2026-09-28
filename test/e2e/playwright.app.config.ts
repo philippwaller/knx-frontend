@@ -1,4 +1,6 @@
 /// <reference types="node" />
+import { fileURLToPath } from "node:url";
+
 import { defineConfig, devices } from "@playwright/test";
 
 import { getE2EWorkers } from "./playwright-workers";
@@ -46,7 +48,7 @@ export default defineConfig({
     url: APP_BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: process.env.CI ? 30_000 : 600_000,
-    cwd: process.env.GITHUB_WORKSPACE ?? new URL("../..", import.meta.url).pathname,
+    cwd: process.env.GITHUB_WORKSPACE ?? fileURLToPath(new URL("../..", import.meta.url)),
     stdout: "pipe",
     stderr: "pipe",
   },

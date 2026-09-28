@@ -50,8 +50,8 @@ defineParallelSmokeTests({
     const errors = trackPageErrors(page);
     await goToKnxRoute(page, smokeCase.path, group.scenario);
     await expectKnxViewReady(page, smokeCase.tag);
-    expectNoPageErrors(errors, `/knx/${smokeCase.path}`);
     expect(await unmockedCalls(page), "WebSocket commands without a mock").toEqual([]);
+    expectNoPageErrors(errors, `/knx/${smokeCase.path}`);
   },
 });
 

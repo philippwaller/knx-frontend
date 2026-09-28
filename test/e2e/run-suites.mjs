@@ -89,24 +89,33 @@ for (const { suite, duration } of results) {
 }
 
 // Collect and merge blob reports regardless of suite outcomes.
+let mergeFailed = false;
 if (isTruthy(process.env.E2E_SKIP_MERGE)) {
   process.stdout.write("\nSkipping merged e2e report because E2E_SKIP_MERGE is set.\n");
 } else {
-  execFileSync("node", ["test/e2e/collect-blob-reports.mjs", ...suites], { stdio: "inherit" });
-  execFileSync(
-    "npx",
-    [
-      "playwright",
-      "merge-reports",
-      "-c",
-      "test/e2e/playwright.merge.config.ts",
-      "test/e2e/reports/blob",
-    ],
-    { stdio: "inherit" },
-  );
+  try {
+    execFileSync("node", ["test/e2e/collect-blob-reports.mjs", ...suites], { stdio: "inherit" });
+    execFileSync(
+      "npx",
+      [
+        "playwright",
+        "merge-reports",
+        "-c",
+        "test/e2e/playwright.merge.config.ts",
+        "test/e2e/reports/blob",
+      ],
+      { stdio: "inherit" },
+    );
+  } catch (err) {
+    mergeFailed = true;
+    process.stderr.write(`\nMerging the e2e reports failed: ${err.message}\n`);
+  }
 }
 
 if (failures.length) {
   process.stderr.write(`\nFailed suites: ${failures.map((s) => `test:e2e:${s}`).join(", ")}\n`);
+}
+
+if (failures.length || mergeFailed) {
   process.exit(1);
 }

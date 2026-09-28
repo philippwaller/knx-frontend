@@ -75,7 +75,8 @@ $ yarn test:e2e:app -g "dpt_reference" --project=chromium
 
 `--ui` opens Playwright's interactive mode and `E2E_WORKERS` sets the number of local workers.
 `yarn test:e2e` runs all suites and merges their reports; `yarn test:e2e:show-report` opens the
-result. Traces, screenshots and videos of failed tests are written to `test/e2e/test-results/`.
+result. Screenshots of failed tests are written to `test/e2e/test-results/`. In CI, retried tests
+also record a trace and a video (the merged report shows them).
 
 In CI the `E2E` workflow builds the test app once and runs the suite in two shards inside the
 official Playwright container. Its version is read from `@playwright/test` in `package.json`,

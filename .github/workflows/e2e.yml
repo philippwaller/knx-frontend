@@ -119,7 +119,7 @@ jobs:
     name: Report
     needs: e2e-app
     runs-on: ubuntu-latest
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     steps:
       - name: Check out files from GitHub
         uses: actions/checkout@v7
