@@ -4,8 +4,9 @@ import log from "fancy-log";
 import fs from "fs";
 import gulp from "gulp";
 import rspack from "@rspack/core";
+import { RspackDevServer } from "@rspack/dev-server";
 import paths from "../paths.cjs";
-import { createKNXConfig } from "../rspack.cjs";
+import { createE2ETestAppConfig, createKNXConfig } from "../rspack.cjs";
 
 const bothBuilds = (createConfigFunc, params) => [
   createConfigFunc({ ...params, latestBuild: true }),
@@ -72,3 +73,53 @@ gulp.task("rspack-prod-knx", () =>
     }),
   ),
 );
+
+const E2E_TEST_APP_PORT = 8095;
+
+// Unlike prodBuild, rejects on compile errors: a broken harness must fail the build instead of
+// serving a blank page to the tests.
+const strictProdBuild = (conf) =>
+  new Promise((resolve, reject) => {
+    rspack(conf, (err, stats) => {
+      if (err) {
+        reject(err);
+      } else if (stats.hasErrors()) {
+        reject(new Error(stats.toString("errors-only")));
+      } else {
+        if (stats.hasWarnings()) {
+          console.log(stats.toString("minimal"));
+        }
+        log(`Build done @ ${new Date().toLocaleTimeString()}`);
+        resolve();
+      }
+    });
+  });
+
+gulp.task("rspack-prod-e2e-test-app", () =>
+  strictProdBuild(createE2ETestAppConfig({ isProdBuild: true })),
+);
+
+gulp.task("rspack-dev-server-e2e-test-app", async () => {
+  const server = new RspackDevServer(
+    {
+      hot: false,
+      open: false,
+      host: "localhost",
+      port: E2E_TEST_APP_PORT,
+      static: {
+        directory: paths.e2e_test_app_output_root,
+        watch: true,
+      },
+      // The panel routes by path (/knx/…); every page request gets the harness index.html.
+      historyApiFallback: true,
+      client: {
+        overlay: {
+          runtimeErrors: (error) => !error?.message?.includes("ResizeObserver loop"),
+        },
+      },
+    },
+    rspack(createE2ETestAppConfig({ isProdBuild: false })),
+  );
+  await server.start();
+  log("[rspack-dev-server]", `E2E test app is running at http://localhost:${E2E_TEST_APP_PORT}`);
+});

@@ -11,6 +11,7 @@
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test:e2e:app": "playwright test --config test/e2e/playwright.app.config.ts",
     "lint:eslint": "eslint \"./src/**/*.{js,ts,html}\" \"./test/e2e/**/*.{ts,mjs}\" --ignore-pattern .gitignore --max-warnings=0",
     "format:eslint": "eslint \"./src/**/*.{js,ts,html}\" \"./test/e2e/**/*.{ts,mjs}\" --fix --ignore-pattern .gitignore",
     "lint:prettier": "prettier \"./src/**/*.{js,ts,json,css,md}\" \"./test/e2e/**/*.{ts,mjs,md}\" --check",

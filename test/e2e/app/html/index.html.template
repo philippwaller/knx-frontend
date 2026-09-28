@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>KNX E2E Test App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <link rel="icon" href="data:," />
+    <script type="module" crossorigin="use-credentials" src="{{ entrypoint }}"></script>
+  </head>
+  <body>
+    <knx-test></knx-test>
+  </body>
+</html>

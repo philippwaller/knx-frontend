@@ -19,5 +19,10 @@ module.exports = {
   knx_output_es5: path.resolve(__dirname, "../knx_frontend/frontend_es5"),
   knx_publicPath: "/knx_static",
 
+  e2e_test_app_dir: path.resolve(__dirname, "../test/e2e/app"),
+  e2e_test_app_output_root: path.resolve(__dirname, "../test/e2e/app/dist"),
+  e2e_test_app_output_static: path.resolve(__dirname, "../test/e2e/app/dist/static"),
+  e2e_test_app_output_latest: path.resolve(__dirname, "../test/e2e/app/dist/frontend_latest"),
+
   translations_src: path.resolve(__dirname, "../homeassistant-frontend/src/translations"),
 };

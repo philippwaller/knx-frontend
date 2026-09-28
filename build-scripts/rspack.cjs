@@ -340,7 +340,11 @@ const createRspackConfig = ({
 const createKNXConfig = ({ isProdBuild, latestBuild }) =>
   createRspackConfig(bundle.config.knx({ isProdBuild, latestBuild }));
 
+const createE2ETestAppConfig = ({ isProdBuild }) =>
+  createRspackConfig(bundle.config.e2eTestApp({ isProdBuild }));
+
 module.exports = {
   createKNXConfig,
+  createE2ETestAppConfig,
   createRspackConfig,
 };

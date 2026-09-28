@@ -235,4 +235,17 @@ module.exports.config = {
       latestBuild,
     };
   },
+
+  // Playwright test app in test/e2e/app. Modern build only: tests run in Chromium.
+  e2eTestApp({ isProdBuild }) {
+    return {
+      entry: {
+        entrypoint: path.resolve(paths.e2e_test_app_dir, "src/entrypoint.ts"),
+      },
+      outputPath: outputPath(paths.e2e_test_app_output_root, true),
+      publicPath: publicPath(true),
+      isProdBuild,
+      latestBuild: true,
+    };
+  },
 };
