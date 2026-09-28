@@ -142,11 +142,16 @@ import { KNXLogger } from "../tools/knx-logger";
   - `upgrade-frontend`: Update Home Assistant frontend submodule
 - `/homeassistant-frontend`: Submodule (AI agents should not modify directly)
 - `/test`: Test files that AI agents should maintain and extend
+  - `/test/e2e`: Playwright end-to-end tests with the `<knx-test>` harness, mocks and fixtures
 
 ## Testing
 
-- **Framework**: Vitest with jsdom
-- **Structure**: Co-locate tests, descriptive naming
+- **Unit tests**: Vitest with jsdom; co-locate tests (`*.test.ts`), descriptive naming
+- **End-to-end tests**: Playwright in `test/e2e/` (see `test/e2e/README.md`)
+  - The panel runs in the `<knx-test>` harness with a fake `hass`; tests never talk to a real Home Assistant
+  - Every WebSocket command a view sends needs a mock in `test/e2e/app/src/mock-ws.ts`, answering with typed data from `test/e2e/app/src/fixtures/`
+  - Use the shared timeouts and page-error tracking from `test/e2e/helpers.ts`
+  - The `testing-knx-frontend-e2e` skill in `.agents/skills/` covers choosing and extending tests
 
 ## Security & Performance
 
@@ -188,6 +193,9 @@ import { KNXLogger } from "../tools/knx-logger";
 - `yarn test`: Run Vitest tests once
 - `yarn test:watch`: Run Vitest in watch mode
 - `yarn test:coverage`: Run tests with coverage report
+- `yarn test:e2e:app`: Run the Playwright end-to-end tests (builds the test app on port 8095 unless a server runs there)
+- `yarn test:e2e:app:dev`: Serve the end-to-end test app with live rebuilds for a fast test loop
+- `yarn test:e2e`: Run all end-to-end suites and merge their reports (`yarn test:e2e:show-report` opens them)
 
 ### Project Maintenance
 

@@ -43,6 +43,49 @@ $ script/upgrade-frontend <tag-or-sha>
 ...
 ```
 
+### End-to-end tests
+
+Playwright tests load the KNX panel in a real browser. A small test app hosts the panel with a
+fake `hass` and mocked KNX WebSocket commands, so no Home Assistant instance is needed.
+
+Install the browser once (on Linux add `--with-deps`):
+
+```shell
+$ yarn playwright install chromium
+...
+```
+
+Run the suite. Playwright builds the test app and serves it on port 8095, or reuses a server
+that already answers there:
+
+```shell
+$ yarn test:e2e:app
+...
+```
+
+For a fast loop, keep a watching dev server running in one terminal and run single tests from
+another:
+
+```shell
+$ yarn test:e2e:app:dev
+...
+$ yarn test:e2e:app -g "dpt_reference" --project=chromium
+...
+```
+
+`--ui` opens Playwright's interactive mode and `E2E_WORKERS` sets the number of local workers.
+`yarn test:e2e` runs all suites and merges their reports; `yarn test:e2e:show-report` opens the
+result. Traces, screenshots and videos of failed tests are written to `test/e2e/test-results/`.
+
+In CI the `E2E` workflow builds the test app once and runs the suite in two shards inside the
+official Playwright container. Its version is read from `@playwright/test` in `package.json`,
+which follows the Home Assistant frontend submodule. The merged HTML report is attached to the
+run as the `playwright-report` artifact, and failed tests are listed in the Codecov comment on
+the pull request.
+
+How the test app works and how to add tests is described in
+[test/e2e/README.md](test/e2e/README.md).
+
 ### Testing the panel
 
 First of all we recommend to follow the instructions for
