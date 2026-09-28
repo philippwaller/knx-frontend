@@ -1,0 +1,2 @@
+export const __rspack_esm_id=83517;export const __rspack_esm_ids=[83517];export const __webpack_modules__={19724(e,t,s){function r(){return{light:[{name:"switch",type:"knx_group_address",required:!0,options:{write:{required:!0},state:{required:!1},validDPTs:[{main:1,sub:1}]}}],sensor:[{name:"state",type:"knx_group_address",required:!0,options:{state:{required:!0},dptSelect:[{value:"9.001",translation_key:"9_001",dpt:{main:9,sub:1}}]}}]}}s.d(t,{createSchemas:()=>r})}};
+//# sourceMappingURL=83517.ff42016556b86cb5.js.map
