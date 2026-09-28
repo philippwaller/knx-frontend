@@ -41,6 +41,9 @@ as an IndexedDB restore, once the view itself is already rendered, so `unmockedC
 until the WebSocket connection has had no command in flight and no activity for a second before
 reading `window.__unmockedCalls`.
 
+`expectKnxViewReady` waits for the view element to be attached, for every loading screen to be
+gone, and fails if an error page (`knx-error`, `knx-not-found`, `hass-error-screen`) is shown.
+
 Backend translations are not loaded, so views show translation keys instead of English text.
 Assert on elements and roles, not on translated text.
 
