@@ -139,11 +139,18 @@ jobs:
       - name: Stage blobs for merge
         run: node test/e2e/collect-blob-reports.mjs app
 
+      # `playwright merge-reports` can exit non-zero (for example if a reporter itself errors
+      # while writing output), but it writes the HTML report and junit.xml before that. Continue
+      # past a merge failure so those files still get uploaded and sent to Codecov; "Check test
+      # results" below re-checks the outcome so a real merge failure still fails the workflow.
       - name: Merge blob reports
+        id: merge
+        continue-on-error: true
         run: yarn playwright merge-reports -c test/e2e/playwright.merge.config.ts test/e2e/reports/blob
 
       - name: Upload merged HTML report
         uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
         with:
           name: playwright-report
           path: test/e2e/reports/combined/
@@ -154,6 +161,7 @@ jobs:
       # which the last step reports.
       - name: Upload test results to Codecov
         uses: codecov/codecov-action@v7
+        if: ${{ !cancelled() }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           report_type: test_results
@@ -162,6 +170,8 @@ jobs:
           fail_ci_if_error: false
 
       - name: Check test results
+        if: ${{ !cancelled() }}
         run: |
           echo "E2E app: ${{ needs.e2e-app.result }}"
-          [ "${{ needs.e2e-app.result }}" = "success" ]
+          echo "Report merge: ${{ steps.merge.outcome }}"
+          [ "${{ needs.e2e-app.result }}" = "success" ] && [ "${{ steps.merge.outcome }}" = "success" ]
