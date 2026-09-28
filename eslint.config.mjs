@@ -223,4 +223,13 @@ export default tseslint.config(
       "html/no-invalid-attr-value": "error",
     },
   },
+  {
+    // Playwright configs and Node scripts of the e2e suite run in Node, not in the browser.
+    files: ["test/e2e/**/*.mjs", "test/e2e/**/*.config.ts", "test/e2e/playwright-workers.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
 );

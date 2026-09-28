@@ -30,6 +30,7 @@ export default defineConfig({
       "homeassistant-frontend/**/*",
       "**/node_modules/**",
       "knx-frontend/**/*",
+      "test/e2e/**",
       ".git/**",
       ".claude/**",
     ],
