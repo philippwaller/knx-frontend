@@ -32,6 +32,9 @@ export default defineConfig({
       "knx-frontend/**/*",
       ".git/**",
       ".claude/**",
+      "**/.worktrees/**",
+      "test/**/*.e2e.ts",
+      "test/playwright.*.ts",
     ],
     bail: 0, // Don't stop after first failure, run all tests
     coverage: {
