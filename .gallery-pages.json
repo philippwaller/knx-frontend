@@ -2,9 +2,16 @@
   "comments": {
     "6": 6048936137
   },
-  "deployment_pending": false,
+  "deployment_pending": true,
   "deployment_run": null,
-  "main": null,
+  "main": {
+    "actor_id": 1090452,
+    "artifact_id": 11519060843,
+    "comment_id": null,
+    "run_attempt": 1,
+    "run_id": 37702525520,
+    "sha": "629460c104d39d169b483221b6e1205af91410ed"
+  },
   "previews": {},
   "published_commit": null,
   "repository": "philippwaller/knx-frontend",
