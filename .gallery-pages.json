@@ -1,0 +1,13 @@
+{
+  "comments": {
+    "6": 6048936137
+  },
+  "deployment_pending": false,
+  "deployment_run": null,
+  "main": null,
+  "previews": {},
+  "published_commit": null,
+  "repository": "philippwaller/knx-frontend",
+  "requests": {},
+  "schema": 1
+}
