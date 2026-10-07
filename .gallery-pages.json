@@ -2,7 +2,7 @@
   "comments": {
     "6": 6048936137
   },
-  "deployment_pending": false,
+  "deployment_pending": true,
   "deployment_run": "37703971933/1",
   "main": {
     "actor_id": 1090452,
@@ -12,7 +12,25 @@
     "run_id": 37702525520,
     "sha": "629460c104d39d169b483221b6e1205af91410ed"
   },
-  "previews": {},
+  "previews": {
+    "6": {
+      "actor_id": 1090452,
+      "artifact_id": 11518038744,
+      "changes": {
+        "components": [
+          {
+            "id": "knx-single-address-selector",
+            "title": "Single address selector"
+          }
+        ],
+        "shared": false
+      },
+      "comment_id": null,
+      "run_attempt": 1,
+      "run_id": 37702542158,
+      "sha": "d78fb147a4e4e4e986a7a860c97179ee02bbc881"
+    }
+  },
   "published_commit": "df2b89ecc65d0c0eeb8a18748bc9344472fea7f3",
   "repository": "philippwaller/knx-frontend",
   "requests": {},
