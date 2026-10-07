@@ -8,7 +8,7 @@ export const entry = defineExample({
   properties: {
     key: "ga_switch.write",
     index: 0,
-    hintMessage: "",
+    hintMessage: "Gallery live preview test A",
     value: "1/0/1",
     label: "Write address",
     parentLabel: "Switch",
