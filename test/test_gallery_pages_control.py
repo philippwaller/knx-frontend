@@ -135,6 +135,26 @@ class ControlFlowTests(unittest.TestCase):
         self.assertFalse((self.root / "gallery-pages-public/pr/12").exists())
         self.assertEqual(self.store.state['published_commit'], self.old)
 
+    def test_early_artifact_cannot_publish_before_all_validation_succeeds(self):
+        self.store.state["published_commit"] = self.candidate
+        self.store.save("Confirm previous preview")
+        current = pull()
+        current["head"]["sha"] = "b" * 40
+        for state, conclusion in [("in_progress", None), ("completed", "failure"),
+                                  ("completed", "cancelled"), ("completed", "timed_out")]:
+            with self.subTest(state=state, conclusion=conclusion):
+                pages.shutil.rmtree(self.root / "gallery-pages-public", ignore_errors=True)
+                (self.root / "outputs").unlink(missing_ok=True)
+                run = dict(self.entry, sha=current["head"]["sha"], target="pr", pr_number=12,
+                           status=state, conclusion=conclusion)
+                with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_run"}), patch.object(pages, "resolve_build_run", return_value=run), patch.object(pages, "github_request", return_value=current), patch.object(pages, "run_artifact", return_value={"id": 20}) as artifact, patch.object(pages, "download_artifact") as download, patch.object(pages, "update_status"):
+                    pages.prepare({"workflow_run": {"id": 10, "run_attempt": 1}})
+                artifact.assert_not_called()
+                download.assert_not_called()
+                self.assertEqual(self.store.state["published_commit"], self.candidate)
+                self.assertEqual(self.store.state["previews"]["12"]["sha"], SHA)
+                self.assertNotIn("deploy=true", (self.root / "outputs").read_text())
+
     def test_unconfirmed_success_is_safe_to_retry(self):
         run = dict(self.entry, target='pr', pr_number=12, conclusion='success', status='completed')
         with patch.object(pages, 'resolve_build_run', return_value=run), patch.object(pages, 'github_request', return_value=pull()):

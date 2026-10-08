@@ -15,14 +15,31 @@ it("keeps PR execution outside privileged jobs", () => {
   expect(gate.run).toMatch(/if \[ -f build-scripts\/gallery_pages\.py \]/);
   expect(gate.run).toContain("base_path=/");
   expect(gate.run).not.toContain("${{");
-  expect(build.jobs.build.permissions).toEqual({ contents: "read" });
+  for (const job of [build.jobs.build, build.jobs["browser-tests"], build.jobs["release-check"]]) {
+    expect(job.permissions).toEqual({ contents: "read" });
+    expect(job.steps[0].with["persist-credentials"]).toBe(false);
+    expect(job.steps[0].with.ref).toBe("${{ needs.gate.outputs.sha }}");
+  }
+  for (const job of [build.jobs["browser-tests"], build.jobs["release-check"]]) {
+    expect(job.needs).toEqual(["gate", "build"]);
+    const artifact = job.steps.find(({ uses }: { uses?: string }) =>
+      uses?.startsWith("actions/download-artifact@"),
+    );
+    expect(artifact.with).toEqual({
+      name: "gallery-${{ github.run_id }}-${{ github.run_attempt }}",
+      path: "build/gallery/",
+    });
+    expect(job.steps.some(({ run }: { run?: string }) => run?.includes("gallery:build"))).toBe(
+      false,
+    );
+  }
+  expect(build.jobs["browser-tests"].strategy.matrix.shard).toEqual([1, 2]);
   // The interactive tests reuse the built gallery at its Pages base path.
-  const interactive = build.jobs.build.steps.find(
+  const interactive = build.jobs["browser-tests"].steps.find(
     ({ name }: { name?: string }) => name === "Test interactive gallery",
   );
   expect(interactive.env).toEqual({ GALLERY_E2E_PRODUCTION: "1" });
-  expect(build.jobs.build.steps[0].with["persist-credentials"]).toBe(false);
-  expect(build.jobs.build.steps[0].with.ref).toBe("${{ needs.gate.outputs.sha }}");
+  expect(interactive.run).toBe("pnpm gallery:test --workers=2 --shard=${{ matrix.shard }}/2");
   expect(publisher.on.pull_request_target.types).toContain("closed");
   expect(publisher.jobs.prepare.if).not.toContain("startsWith");
   expect(publisher.on.issue_comment).toBeUndefined();

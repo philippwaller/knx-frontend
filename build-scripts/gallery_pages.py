@@ -399,9 +399,7 @@ def status_body(pr: dict, published: dict | None, url: str, phase: str = "", *,
         "Preview cleanup pending": ("⚪", "This pull request is closed. Its preview will be removed by the next successful deployment."),
         "Preview removed": ("⚪", "This pull request is closed and its preview has been removed."),
     }[label]
-    status = (f"![Ready](https://raw.githubusercontent.com/{repository()}/main/.github/gallery-preview-ready.svg)"
-              if label == "Ready" else f"{icon} {label}")
-    body = f"<!-- knx-gallery-preview -->\n### Gallery preview · {status}\n\n{explanation}\n\n"
+    body = f"<!-- knx-gallery-preview -->\n### Gallery preview · {icon} {label}\n\n{explanation}\n\n"
     build_url = f"https://github.com/{repository()}/actions/runs/{build['id']}" if build else None
     pending = pr["state"] == "open" and not ready
     rerunnable = pending and build and (not approved or label in {"Build failed", "Build skipped", "Deployment failed"})

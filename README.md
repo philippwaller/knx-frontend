@@ -134,8 +134,11 @@ to the normal viewport height while open.
 Collapsing the catalog gives the preview more workspace while retaining the selected
 viewport width. Dialogs and viewport contexts stay inside the preview iframe.
 
-The canvas is a fixed board with one column per selected device. Compare puts all
-Light previews in the upper row and their Dark counterparts directly below them.
+The canvas is a fixed board. Compare places Light and Dark side by side for one
+selected device. With multiple devices, it puts Light previews in the upper row
+and their Dark counterparts directly below them. Each device button tooltip explains
+how to select multiple devices with ⌘ or Ctrl. Every preview caption shows its
+current zoom percentage, without an additional scale selector.
 Fit all fits the whole board in both directions; 100% restores actual CSS size.
 The shared −/+ controls zoom between 10% and 200% while preserving the visible
 center. Fit can go below 10% for very wide boards. Scroll, swipe, or drag the
@@ -412,5 +415,8 @@ GALLERY_BASE_PATH=/demo/pr/42/ pnpm exec playwright test --config test/playwrigh
 GALLERY_BASE_PATH=/ pnpm gallery:test --workers=2
 ```
 
-The gallery build workflow also performs the regular release/wheel build with
-`build/gallery` present and checks that no gallery files enter the Python package.
+The gallery build workflow compiles the gallery and generates thumbnails once,
+then shares that artifact with two parallel browser-test shards and a parallel
+release/wheel check. Each browser shard keeps two workers. The release check builds
+with `build/gallery` present and verifies that no gallery files enter the Python
+package. Publication waits for the entire workflow to succeed.

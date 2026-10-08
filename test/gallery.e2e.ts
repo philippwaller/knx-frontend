@@ -257,6 +257,55 @@ async function expectBoardFits(page: Page) {
     .toBe(true);
 }
 
+test("compare changes from columns to rows without replacing active previews", async ({ page }) => {
+  await page.setViewportSize({ width: 2160, height: 1000 });
+  await page.goto("./?component=knx-single-address-selector&scenario=default");
+  const primary = page.locator('iframe[data-device="phone"][data-pane="primary"]');
+  const original = await primary.elementHandle();
+  await page.frameLocator('iframe[data-device="phone"]').locator("input").fill("1/2/42");
+  await page.getByRole("button", { name: /^Compare/ }).click();
+  const geometry = () =>
+    page.locator(".preview-card").evaluateAll((cards) =>
+      cards.map((card) => {
+        const { x, y, right, bottom } = card.getBoundingClientRect();
+        return { x, y, right, bottom };
+      }),
+    );
+  const expectColumns = async () => {
+    await expect(page.locator(".preview-card")).toHaveCount(2);
+    await expect
+      .poll(async () => {
+        const [light, dark] = await geometry();
+        return light.y === dark.y && dark.x > light.right;
+      })
+      .toBe(true);
+    await expectBoardFits(page);
+  };
+  await expectColumns();
+  await page.getByRole("button", { name: /^Tablet · 768/ }).click({ modifiers: ["Meta"] });
+  await expect(page.locator(".preview-card")).toHaveCount(4);
+  await expect
+    .poll(async () => {
+      const [phone, tablet, darkPhone, darkTablet] = await geometry();
+      return (
+        phone.y === tablet.y &&
+        darkPhone.y === darkTablet.y &&
+        darkPhone.x === phone.x &&
+        darkTablet.x === tablet.x &&
+        darkPhone.y > Math.max(phone.bottom, tablet.bottom)
+      );
+    })
+    .toBe(true);
+  await page.getByRole("button", { name: /^Tablet · 768/ }).click({ modifiers: ["Meta"] });
+  await expectColumns();
+  expect(await primary.evaluate((frame, before) => frame === before, original)).toBe(true);
+  await expect(
+    page.frameLocator('iframe[data-device="phone"][data-pane="primary"]').locator("input"),
+  ).toHaveValue("1/2/42");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectColumns();
+});
+
 test("canvas board aligns six panes without changing viewport geometry", async ({ page }) => {
   await page.setViewportSize({ width: 2160, height: 1000 });
   await page.goto("./?component=knx-separator&scenario=expanded");
@@ -577,7 +626,12 @@ test("canvas panning leaves preview and background wheel scrolling native", asyn
   await page.getByRole("spinbutton", { name: "Height (px)", exact: true }).fill("2000");
   await page.getByRole("button", { name: /^Compare/ }).click();
   await page.getByRole("button", { name: "100%", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   const surface = page.locator(".canvas");
+  await expect
+    .poll(() => surface.evaluate((element) => element.scrollHeight > element.clientHeight))
+    .toBe(true);
   await surface.evaluate((element) => {
     element.scrollTop = 0;
   });
@@ -594,7 +648,7 @@ test("canvas panning leaves preview and background wheel scrolling native", asyn
     .locator("body")
     .evaluate(() => document.scrollingElement!.scrollTop);
   const canvas = (await surface.boundingBox())!;
-  await page.mouse.move(canvas.x + 8, canvas.y + 100);
+  await page.mouse.move(canvas.x + 8, canvas.y + 8);
   await page.mouse.wheel(0, 200);
   await expect.poll(() => surface.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   expect(await preview.locator("body").evaluate(() => document.scrollingElement!.scrollTop)).toBe(
@@ -1808,9 +1862,14 @@ test("canvas comparison shares controls, preserves sessions and keeps real viewp
   expect(await light.locator("html").evaluate(() => innerWidth)).toBe(768);
   expect(await dark.locator("html").evaluate(() => innerWidth)).toBe(768);
   const cards = page.locator(".preview-card");
-  expect((await cards.nth(1).boundingBox())!.y).toBeGreaterThan(
-    (await cards.first().boundingBox())!.y,
-  );
+  await expect
+    .poll(() =>
+      cards.evaluateAll(
+        ([lightCard, darkCard]) =>
+          lightCard.getBoundingClientRect().y === darkCard.getBoundingClientRect().y,
+      ),
+    )
+    .toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator(".theme-mode-menu").getByRole("button").click();
@@ -4189,15 +4248,25 @@ test("canvas captions report actual viewport dimensions through resize, auto hei
           const frame = await card.locator("iframe").evaluate((element: HTMLIFrameElement) => ({
             width: element.contentWindow!.innerWidth,
             height: element.contentWindow!.innerHeight,
+            scale: Math.round(
+              (element.getBoundingClientRect().width / element.contentWindow!.innerWidth) * 100,
+            ),
           }));
           return (
             (await card.locator(".preview-dimensions").textContent())?.trim() ===
-            `${Math.round(frame.width)} × ${Math.round(frame.height)} px`
+              `${Math.round(frame.width)} × ${Math.round(frame.height)} px` &&
+            (await card.locator(".preview-scale").textContent())?.trim() === `${frame.scale}%`
           );
         })
         .toBe(true);
     }
   };
+  await checkDimensions();
+  await page.getByRole("button", { name: "100%", exact: true }).click();
+  await checkDimensions();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await checkDimensions();
+  await page.getByRole("button", { name: "Fit all", exact: true }).click();
   await checkDimensions();
   await page.getByRole("button", { name: /^Auto height/ }).click();
   await expect(page.locator(".preview-dimensions")).toHaveText("390 × 50 px");

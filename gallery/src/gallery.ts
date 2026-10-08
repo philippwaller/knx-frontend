@@ -843,6 +843,7 @@ export class KnxComponentGallery extends LitElement {
             <span aria-hidden="true">·</span>
             <span role="status" class=${error ? "error" : ""} title=${status}>${status}</span>
           </span>
+          <span class="preview-scale" title=${en.ui.zoom}>${Math.round(this._scale * 100)}%</span>
         </div>
       </div>
       ${error ? html`<p class="error" role="alert">${error}</p>` : nothing}
@@ -1156,6 +1157,10 @@ export class KnxComponentGallery extends LitElement {
         key: this._paneKey(device.id, comparison),
       })),
     );
+    const columns =
+      this._compare && this._selectedDevices.length === 1
+        ? [this._selectedDevices[0], this._selectedDevices[0]]
+        : this._selectedDevices;
     const previewMode = this._compare ? "compare" : this._theme.mode;
     const inspectorVisible = this._compact ? this._inspectorOpen : !this._inspectorCollapsed;
     const valid = entry?.meta.scenarios.some((scenario) => scenario.id === this._scenarioId);
@@ -1494,7 +1499,7 @@ export class KnxComponentGallery extends LitElement {
                                 .appearance=${this._selectedDevices.some((item) => item.id === device.id) ? "accent" : "plain"}
                                 .variant=${this._selectedDevices.some((item) => item.id === device.id) ? "brand" : "neutral"}
                                 .ariaLabel=${`${en.ui.devices[device.id]} · ${device.width} px${this._selectedDevices.some((item) => item.id === device.id) ? ` · ${en.ui.selected}` : ""}`}
-                                .title=${`${en.ui.devices[device.id]} · ${device.width} px`}
+                                .title=${`${en.ui.devices[device.id]} · ${device.width} px. ${en.ui.multiDeviceHelp}`}
                                 @click=${this._presetWidth}
                               >
                                 <ha-svg-icon slot="start" .path=${device.icon}></ha-svg-icon
@@ -1634,7 +1639,7 @@ export class KnxComponentGallery extends LitElement {
                           >
                             <div
                               class="canvas-board"
-                              style=${`grid-template-columns: ${this._selectedDevices.map((device) => `${device.width + 2}px`).join(" ")}; left: ${Math.max(24, (this._stageSize.width - this._boardSize.width * this._scale) / 2)}px; top: ${Math.max(24, (this._stageSize.height - this._boardSize.height * this._scale) / 2)}px; transform: scale(${this._scale});`}
+                              style=${`grid-template-columns: ${columns.map((device) => `${device.width + 2}px`).join(" ")}; left: ${Math.max(24, (this._stageSize.width - this._boardSize.width * this._scale) / 2)}px; top: ${Math.max(24, (this._stageSize.height - this._boardSize.height * this._scale) / 2)}px; transform: scale(${this._scale});`}
                             >
                               ${keyed(
                                 this._sessionId,
