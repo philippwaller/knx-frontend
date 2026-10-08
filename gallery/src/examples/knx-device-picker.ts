@@ -8,7 +8,7 @@ export const entry = defineExample({
   copy,
   properties: {
     label: "KNX device",
-    helper: "Choose a device from the offline project.",
+    helper: "Choose a device from the offline project. Test preview: updated device picker.",
     value: "1.1.1",
   },
   events: ["value-changed", "show-dialog"],
