@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import hashlib
+import http.client
 import shutil
 import tarfile
 import tempfile
@@ -49,8 +50,10 @@ def has_gallery_changes(paths: list[str]) -> bool:
     files = {"homeassistant-frontend", ".gitmodules", "package.json", "yarn.lock", ".yarnrc.yml",
              "pnpm-lock.yaml", "pnpm-workspace.yaml",
              ".nvmrc", "tsconfig.json", ".browserslistrc", "rspack.config.cjs", "gulpfile.js",
-             "config.js", "VERSION", "test/gallery-thumbnails.ts", "test/playwright.gallery-thumbnails.config.ts"}
-    return any(path in files or path.startswith(prefixes) for path in paths)
+             "config.js", "VERSION", "test/gallery-thumbnails.ts", "test/gallery.e2e.ts",
+             "test/gallery-pages.e2e.ts"}
+    return any(path in files or path.startswith(prefixes)
+               or re.fullmatch(r"test/playwright\.gallery[^/]*\.config\.ts", path) for path in paths)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -213,6 +216,20 @@ def relevant(pr: dict, old_sha: str | None = None) -> bool:
         paths = git("diff", "--name-only", "--no-renames", "-z", base, head).split("\0")
         return has_gallery_changes(paths)
     except subprocess.CalledProcessError:
+        return True
+
+
+def relevant_main(sha: str, old_sha: str) -> bool:
+    if not re.fullmatch("[a-f0-9]{40}", old_sha):
+        return True
+    if sha == old_sha:
+        return False
+    try:
+        git("-c", "core.hooksPath=/dev/null", "fetch", "--no-recurse-submodules", "--no-tags",
+            "origin", old_sha, sha)
+        paths = git("diff", "--name-only", "--no-renames", "-z", old_sha, sha).split("\0")
+        return has_gallery_changes(paths)
+    except (subprocess.CalledProcessError, OSError):
         return True
 
 
@@ -701,6 +718,14 @@ def gate(event: dict):
         sha = event["after"]
         if event["ref"] != "refs/heads/main" or not re.fullmatch("[a-f0-9]{40}", sha):
             return
+        if enabled:
+            try:
+                previous = published_remote_state()["main"]
+            except (OSError, http.client.HTTPException, ValueError, KeyError, TypeError):
+                previous = None
+            old_sha = previous.get("sha") if isinstance(previous, dict) else None
+            if isinstance(old_sha, str) and not relevant_main(sha, old_sha):
+                return
         output(build=True, sha=sha, pr_number="", base_path=base)
         return
     original = event["pull_request"]

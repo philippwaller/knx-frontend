@@ -5,7 +5,8 @@ export default defineConfig({
   testDir: ".",
   testMatch: "gallery-thumbnails.ts",
   outputDir: "coverage/gallery-thumbnails",
-  workers: 1,
+  fullyParallel: true,
+  workers: 2,
   maxFailures: 1,
   use: {
     baseURL: `http://127.0.0.1:8093${process.env.GALLERY_BASE_PATH ?? "/"}`,

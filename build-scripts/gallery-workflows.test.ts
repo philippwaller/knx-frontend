@@ -1,9 +1,73 @@
 // @vitest-environment node
+/* eslint-disable no-template-curly-in-string -- GitHub Actions expressions are literal workflow data. */
 import { readFileSync } from "node:fs";
 import { load } from "js-yaml";
 import { expect, it } from "vitest";
 
 const workflow = (name: string): any => load(readFileSync(`.github/workflows/${name}.yml`, "utf8"));
+
+it("cancels only superseded validation runs for the same PR", () => {
+  expect(workflow("gallery-build").concurrency).toEqual({
+    group:
+      "${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}",
+    "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+  });
+  expect(workflow("gallery-pages").concurrency).toEqual({ group: "gallery-pages", queue: "max" });
+});
+
+it.each([
+  ["build", "pnpm gallery:build"],
+  ["release-check", "KNX_BUILD_STATS=1 pnpm build"],
+])(
+  "restores a role-specific Babel cache before %s compilation and saves only on Main pushes",
+  (role, command) => {
+    const job = workflow("gallery-build").jobs[role];
+    expect(job.env?.BABEL_CACHE_DIR).toBe("${{ runner.temp }}/babel-loader");
+    const restoreIndex = job.steps.findIndex(({ uses }: { uses?: string }) =>
+      uses?.startsWith("actions/cache/restore@"),
+    );
+    const compileIndex = job.steps.findIndex(({ run }: { run?: string }) => run === command);
+    const pruneIndex = job.steps.findIndex(
+      ({ name }: { name?: string }) => name === "Prune old Babel cache entries",
+    );
+    const saveIndex = job.steps.findIndex(({ uses }: { uses?: string }) =>
+      uses?.startsWith("actions/cache/save@"),
+    );
+    expect(restoreIndex).toBeGreaterThan(-1);
+    expect(restoreIndex).toBeLessThan(compileIndex);
+    expect(pruneIndex).toBeGreaterThan(compileIndex);
+    expect(saveIndex).toBeGreaterThan(pruneIndex);
+    const restore = job.steps[restoreIndex];
+    expect(restore.with).toEqual({
+      path: "${{ runner.temp }}/babel-loader",
+      key: "gallery-babel-loader-${{ runner.os }}-${{ github.job }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}-${{ needs.gate.outputs.sha }}",
+      "restore-keys":
+        "gallery-babel-loader-${{ runner.os }}-${{ github.job }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}-\n" +
+        "babel-loader-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-\n",
+    });
+    const mainPush = "github.event_name == 'push' && github.ref == 'refs/heads/main'";
+    expect(job.steps[pruneIndex].if).toBe(mainPush);
+    expect(job.steps[pruneIndex].run).toBe('find "$BABEL_CACHE_DIR" -type f -mtime +30 -delete');
+    expect(job.steps[saveIndex].if).toBe(mainPush);
+    expect(job.steps[saveIndex].with).toEqual({
+      path: "${{ runner.temp }}/babel-loader",
+      key: "${{ steps.babel-cache.outputs.cache-primary-key }}",
+    });
+    expect(
+      job.steps.filter(({ uses }: { uses?: string }) => uses?.startsWith("actions/cache/")),
+    ).toHaveLength(2);
+  },
+);
+
+it("pins every external Gallery validation Action to a commit", () => {
+  for (const job of Object.values(workflow("gallery-build").jobs) as any[]) {
+    for (const step of job.steps) {
+      if (step.uses && !step.uses.startsWith("./")) {
+        expect(step.uses).toMatch(/@[a-f0-9]{40}$/);
+      }
+    }
+  }
+});
 
 it("keeps PR execution outside privileged jobs", () => {
   const build = workflow("gallery-build");
