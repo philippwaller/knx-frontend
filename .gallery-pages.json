@@ -2,8 +2,8 @@
   "comments": {
     "6": 6048936137
   },
-  "deployment_pending": true,
-  "deployment_run": "37706011138/1",
+  "deployment_pending": false,
+  "deployment_run": "37707977204/1",
   "main": {
     "actor_id": 1090452,
     "artifact_id": 11519060843,
@@ -35,7 +35,7 @@
       "sha": "f549f0284a9cb85a1c16aa4ac7ccb7ac251ef71f"
     }
   },
-  "published_commit": "830dda6e11e074af9e0284706e5858c564f1feaf",
+  "published_commit": "75713c0b9cfbc20d5ae9aa7c46b2a76469ac9e6a",
   "repository": "philippwaller/knx-frontend",
   "requests": {},
   "schema": 1
