@@ -52,3 +52,5 @@ export const entry = defineExample({
     };
   },
 });
+
+export const intentionalLiveBuildFailure = ;
