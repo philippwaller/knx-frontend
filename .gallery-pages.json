@@ -2,7 +2,7 @@
   "comments": {
     "6": 6048936137
   },
-  "deployment_pending": false,
+  "deployment_pending": true,
   "deployment_run": "37703989570/1",
   "main": {
     "actor_id": 1090452,
@@ -15,9 +15,13 @@
   "previews": {
     "6": {
       "actor_id": 1090452,
-      "artifact_id": 11518038744,
+      "artifact_id": 11519069414,
       "changes": {
         "components": [
+          {
+            "id": "knx-device-picker",
+            "title": "Device picker"
+          },
           {
             "id": "knx-single-address-selector",
             "title": "Single address selector"
@@ -27,8 +31,8 @@
       },
       "comment_id": null,
       "run_attempt": 1,
-      "run_id": 37702542158,
-      "sha": "d78fb147a4e4e4e986a7a860c97179ee02bbc881"
+      "run_id": 37704533568,
+      "sha": "c8f60f93661d4e45bf15acc8da660359ca0b0bc3"
     }
   },
   "published_commit": "80dfffcd04a4fd70c57e8d03a82edc2ce030ad01",
