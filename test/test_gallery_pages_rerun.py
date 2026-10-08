@@ -175,7 +175,7 @@ class NativeRerunTests(unittest.TestCase):
             pages.prepare({"workflow_run": {"id": 10, "run_attempt": 2}})
         body = self.writes[-1][2]["body"]
         self.assertIn("actions/runs/11", body)
-        self.assertIn("**Building**", body)
+        self.assertIn("### Gallery preview · 🔵 Building", body)
         self.assertNotIn("Build failed", body)
 
     def test_failed_new_build_retains_the_published_component_links(self):
