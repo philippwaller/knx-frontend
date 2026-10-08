@@ -113,8 +113,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Benchmark baseline: preserve two browser shards.
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     env:
       GALLERY_BASE_PATH: ${{ needs.gate.outputs.base_path }}
     steps:
@@ -131,7 +130,7 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Test interactive gallery
-        run: pnpm gallery:test --workers=2 --shard=${{ matrix.shard }}/2
+        run: pnpm gallery:test --workers=2 --shard=${{ matrix.shard }}/4
         env:
           GALLERY_E2E_PRODUCTION: "1"
 
