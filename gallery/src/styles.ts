@@ -1210,6 +1210,11 @@ export const shellStyles = css`
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .preview-scale {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
   .preview-meta [role="status"].error {
     color: var(--error-color);
   }
