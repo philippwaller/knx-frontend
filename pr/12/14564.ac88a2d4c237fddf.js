@@ -1,0 +1,2 @@
+export const __rspack_esm_id=14564;export const __rspack_esm_ids=[14564];export const __webpack_modules__={5039(e,t,a){a.a(e,async function(e,c){try{a.r(t);var s=a(15151),o=a(72283),_=a(5994),r=e([_]);_=(r.then?(await r)():r)[0];class n extends _.HaAppSelector{}n=(0,s.Cg)([(0,o.EM)("ha-selector-addon")],n),a.d(t,{HaAddonSelector:()=>n}),c()}catch(e){c(e)}})}};
+//# sourceMappingURL=14564.ac88a2d4c237fddf.js.map
