@@ -6,15 +6,15 @@
     "8": 6059290212,
     "9": 6059551633
   },
-  "deployment_pending": false,
+  "deployment_pending": true,
   "deployment_run": "37779522338/1",
   "main": {
     "actor_id": 1090452,
-    "artifact_id": 11549548389,
+    "artifact_id": 11552996684,
     "comment_id": null,
     "run_attempt": 1,
-    "run_id": 37774764650,
-    "sha": "b416bca819f4e79b4489179f4777edd975f4f4b3"
+    "run_id": 37780121928,
+    "sha": "39d264ed30d0cf98c24ab1b81e075c846f5711fc"
   },
   "previews": {
     "7": {
