@@ -58,7 +58,6 @@ jobs:
       contents: read
     env:
       GALLERY_BASE_PATH: ${{ needs.gate.outputs.base_path }}
-      BABEL_CACHE_DIR: ${{ runner.temp }}/babel-loader
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -81,9 +80,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Build gallery and thumbnails
         run: pnpm gallery:build
+        env:
+          BABEL_CACHE_DIR: ${{ runner.temp }}/babel-loader
       - name: Prune old Babel cache entries
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: find "$BABEL_CACHE_DIR" -type f -mtime +30 -delete
+        env:
+          BABEL_CACHE_DIR: ${{ runner.temp }}/babel-loader
       - name: Save Babel cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -137,8 +140,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-    env:
-      BABEL_CACHE_DIR: ${{ runner.temp }}/babel-loader
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -161,9 +162,13 @@ jobs:
           path: build/gallery/
       - name: Build release with gallery output present
         run: KNX_BUILD_STATS=1 pnpm build
+        env:
+          BABEL_CACHE_DIR: ${{ runner.temp }}/babel-loader
       - name: Prune old Babel cache entries
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: find "$BABEL_CACHE_DIR" -type f -mtime +30 -delete
+        env:
+          BABEL_CACHE_DIR: ${{ runner.temp }}/babel-loader
       - name: Save Babel cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

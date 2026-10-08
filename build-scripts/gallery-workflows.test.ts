@@ -22,7 +22,8 @@ it.each([
   "restores a role-specific Babel cache before %s compilation and saves only on Main pushes",
   (role, command) => {
     const job = workflow("gallery-build").jobs[role];
-    expect(job.env?.BABEL_CACHE_DIR).toBe("${{ runner.temp }}/babel-loader");
+    // The runner context is available in step env, but forbidden in job env.
+    expect(job.env?.BABEL_CACHE_DIR).toBeUndefined();
     const restoreIndex = job.steps.findIndex(({ uses }: { uses?: string }) =>
       uses?.startsWith("actions/cache/restore@"),
     );
@@ -37,6 +38,8 @@ it.each([
     expect(restoreIndex).toBeLessThan(compileIndex);
     expect(pruneIndex).toBeGreaterThan(compileIndex);
     expect(saveIndex).toBeGreaterThan(pruneIndex);
+    expect(job.steps[compileIndex].env?.BABEL_CACHE_DIR).toBe("${{ runner.temp }}/babel-loader");
+    expect(job.steps[pruneIndex].env?.BABEL_CACHE_DIR).toBe("${{ runner.temp }}/babel-loader");
     const restore = job.steps[restoreIndex];
     expect(restore.with).toEqual({
       path: "${{ runner.temp }}/babel-loader",
