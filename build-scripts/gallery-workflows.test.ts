@@ -100,13 +100,13 @@ it("keeps PR execution outside privileged jobs", () => {
       false,
     );
   }
-  expect(build.jobs["browser-tests"].strategy.matrix.shard).toEqual([1, 2]);
+  expect(build.jobs["browser-tests"].strategy.matrix.shard).toEqual([1, 2, 3, 4]);
   // The interactive tests reuse the built gallery at its Pages base path.
   const interactive = build.jobs["browser-tests"].steps.find(
     ({ name }: { name?: string }) => name === "Test interactive gallery",
   );
   expect(interactive.env).toEqual({ GALLERY_E2E_PRODUCTION: "1" });
-  expect(interactive.run).toBe("pnpm gallery:test --workers=2 --shard=${{ matrix.shard }}/2");
+  expect(interactive.run).toBe("pnpm gallery:test --workers=2 --shard=${{ matrix.shard }}/4");
   expect(publisher.on.pull_request_target.types).toContain("closed");
   expect(publisher.jobs.prepare.if).not.toContain("startsWith");
   expect(publisher.on.issue_comment).toBeUndefined();
