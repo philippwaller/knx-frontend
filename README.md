@@ -328,18 +328,22 @@ The gallery workflows publish `main` at the repository's Pages URL and previews 
   preview when gallery inputs change. Inputs include components, examples, build
   scripts, dependencies and the pinned Home Assistant frontend. Documentation-only
   changes do not rebuild a previously published gallery.
-- For an external contributor, a maintainer posts a new, unedited comment containing
-  only `/preview <full-40-character-head-SHA>`. The bot provides a copyable command.
-  Approval applies to that exact commit. Every subsequent commit needs a new approval;
-  the previous published preview remains available and is marked out of date.
-- Repeating a request for an already published SHA does not rebuild it. If a build is
-  already running, the request waits for its result; a skipped build is rerun once.
-  GitHub's separate approval for first-time fork workflows may still be necessary.
-- If no matching PR run exists or an old run cannot be rerun, edit the PR description
-  to create a fresh run, approve the fork workflow in Actions when prompted, and post
-  a new SHA approval if needed. Failed or ambiguous rerun requests are not retried in
-  a loop. Check Actions before submitting a new request.
-- The bot keeps one marked status comment per PR and updates it in place.
+- For an external contributor, open the **Gallery build** linked in the bot's
+  status comment and select **Re-run all jobs**. A user with current **write,
+  maintain or admin** access starting that rerun approves its exact PR head and
+  run attempt for publication. Every subsequent commit needs a new maintainer
+  rerun; the previous published preview remains available and is marked out of date.
+  `/preview` comments no longer start or approve builds.
+- A maintainer rerun explicitly requests the preview, including documentation-only
+  PRs. A commit that is already published does not rebuild. No bot automatically
+  reruns jobs. GitHub's separate approval for first-time fork workflows may still
+  be necessary before the initial workflow can run.
+- GitHub allows reruns for 30 days after the initial run. If no matching run exists
+  or the old run no longer allows a rerun, edit the PR description to create a
+  fresh run, approve the fork workflow in Actions when prompted, and select
+  **Re-run all jobs** in that new Gallery build.
+- The bot keeps one marked status comment per PR and updates it in place with
+  the current build link, approval/build/publication status and the published commit.
   After publication it lists changed components with direct links to their gallery
   examples. The list covers the complete PR diff against main at the published
   commit, using the catalog shipped with that build. Common styles, helpers,
@@ -350,7 +354,8 @@ The gallery workflows publish `main` at the repository's Pages URL and previews 
 - Closing or merging a PR removes its preview from the next successful deployment.
   Reopening follows the same permission rules. The **Gallery Pages → Run workflow**
   action reconciles closed previews and retries saved, still-authorized deployment
-  candidates. Rerun a failed Gallery build if it never produced a candidate.
+  candidates. Select **Re-run all jobs** in the linked Gallery build if it never
+  produced a candidate.
 
 Builds run without write permissions or repository secrets. The publisher runs code
 from `main`, never installs PR dependencies, never restores a build cache and treats

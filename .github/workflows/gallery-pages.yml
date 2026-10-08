@@ -1,14 +1,12 @@
 name: Gallery Pages
 
 on:
-  issue_comment:
-    types: [created]
   pull_request_target:
     branches: [main]
     types: [opened, synchronize, reopened, closed, edited]
   workflow_run:
     workflows: [Gallery build]
-    types: [completed]
+    types: [in_progress, completed]
   workflow_dispatch:
 
 permissions: {}
@@ -21,13 +19,12 @@ concurrency:
 jobs:
   prepare:
     if: >-
-      vars.GALLERY_PAGES_ENABLED == 'true' && github.ref == 'refs/heads/main' &&
-      (github.event_name != 'issue_comment' || github.event.issue.pull_request)
+      vars.GALLERY_PAGES_ENABLED == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
-      actions: write
+      actions: read
       pull-requests: write
       pages: read
     outputs:
@@ -88,6 +85,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      actions: read
       pull-requests: write
       pages: read
     steps:

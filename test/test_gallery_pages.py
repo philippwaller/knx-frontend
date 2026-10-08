@@ -15,44 +15,36 @@ def pull():
             "head": {"sha": SHA, "repo": {"id": 99}}, "user": {"id": 1}}
 
 
-def comment():
-    return {"id": 7, "body": f"/preview {SHA}", "user": {"id": 2},
-            "created_at": "2026-09-27T12:00:00Z", "updated_at": "2026-09-27T12:00:00Z"}
+def rerun():
+    return {"id": 10, "run_attempt": 2, "workflow_id": 4, "event": "pull_request",
+            "conclusion": "success", "status": "completed", "head_sha": SHA,
+            "run_started_at": "2026-10-08T12:01:00Z",
+            "head_repository": {"id": 99}, "repository": {"full_name": "owner/repo"},
+            "pull_requests": [{"number": 12}], "actor": {"id": 1, "login": "contributor"},
+            "triggering_actor": {"id": 2, "login": "maintainer"}, "head_branch": "feature"}
 
 
 class PolicyTests(unittest.TestCase):
-    def test_exact_sha_command(self):
-        self.assertEqual(pages.parse_preview_request(f" /preview {SHA}\n"), SHA)
-        for body in ["/preview aaa", f"> /preview {SHA}", f"```\n/preview {SHA}\n```", f"/preview {SHA} now"]:
-            self.assertIsNone(pages.parse_preview_request(body))
-
     def test_permission_required(self):
         for role in ["write", "maintain", "admin"]:
-            self.assertTrue(pages.is_maintainer(role))
+            allowed = pages.authorize_preview(pull(), "read", rerun(), role)
+            self.assertEqual(allowed["actor_id"], 2)
+            self.assertEqual(allowed["sha"], SHA)
         for role in ["read", "triage", "MEMBER", "OWNER", ""]:
-            self.assertFalse(pages.is_maintainer(role))
-        self.assertIsNone(pages.authorize_preview(pull(), "read", [comment()], {2: "read"}))
-        allowed = pages.authorize_preview(pull(), "read", [comment()], {2: "write"})
-        self.assertEqual(allowed["comment_id"], 7)
-        self.assertEqual(allowed["sha"], SHA)
+            self.assertIsNone(pages.authorize_preview(pull(), "read", rerun(), role))
 
     def test_current_head_only(self):
         pr = pull(); pr["head"]["sha"] = "b" * 40
-        self.assertIsNone(pages.authorize_preview(pr, "read", [comment()], {2: "admin"}))
-
-    def test_edited_or_deleted_comment_denied(self):
-        edited = comment(); edited["updated_at"] = "2026-09-27T13:00:00Z"
-        self.assertIsNone(pages.authorize_preview(pull(), "read", [edited], {2: "admin"}))
-        self.assertIsNone(pages.authorize_preview(pull(), "read", [], {2: "admin"}))
+        self.assertIsNone(pages.authorize_preview(pr, "read", rerun(), "admin"))
 
     def test_closed_or_wrong_base_denied(self):
         for field, value in [("state", "closed"), ("base", {"ref": "dev"}), ("head", {"sha": SHA, "repo": None})]:
             pr = pull(); pr[field] = value
-            self.assertIsNone(pages.authorize_preview(pr, "admin", [], {}))
+            self.assertIsNone(pages.authorize_preview(pr, "admin", rerun(), "write"))
 
     def test_missing_api_fields_fail_closed(self):
         with self.assertRaises((KeyError, ValueError)):
-            pages.authorize_preview({}, "admin", [], {})
+            pages.authorize_preview({}, "admin")
 
     def test_indirect_build_inputs_are_relevant(self):
         for path in ["src/styles.ts", "gallery/src/catalog.ts", "homeassistant-frontend", "yarn.lock", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".nvmrc", "script/bootstrap", ".yarn/patches/x.patch", "test/gallery-thumbnails.ts"]:
@@ -70,10 +62,7 @@ class ControlTests(unittest.TestCase):
         env.start(); self.addCleanup(env.stop)
 
     def run_data(self):
-        return {"id": 10, "run_attempt": 2, "workflow_id": 4, "event": "pull_request",
-                "conclusion": "success", "status": "completed", "head_sha": SHA,
-                "head_repository": {"id": 99}, "repository": {"full_name": "owner/repo"},
-                "pull_requests": [{"number": 12}], "actor": {"id": 1}, "head_branch": "feature"}
+        return rerun()
 
     def test_unrelated_run_is_denied(self):
         run = self.run_data(); run["workflow_id"] = 8
@@ -87,7 +76,7 @@ class ControlTests(unittest.TestCase):
             if path.endswith("/workflows/gallery-build.yml"): return {"id": 4}
             if path.endswith("/pulls/12"): return pull()
             raise AssertionError(path)
-        with patch.dict(pages.os.environ, {"GITHUB_REPOSITORY": "owner/repo"}), patch.object(pages, "github_request", side_effect=api), patch.object(pages, "authorization", return_value={"sha": SHA, "comment_id": 7, "actor_id": 2, "kind": "comment"}):
+        with patch.dict(pages.os.environ, {"GITHUB_REPOSITORY": "owner/repo"}), patch.object(pages, "github_request", side_effect=api), patch.object(pages, "authorization", return_value={"sha": SHA, "comment_id": None, "actor_id": 2, "kind": "rerun"}):
             resolved = pages.resolve_build_run({"workflow_run": run})
             self.assertEqual(resolved["pr_number"], 12)
             self.assertEqual(resolved["sha"], SHA)
@@ -100,11 +89,11 @@ class ControlTests(unittest.TestCase):
             if path.endswith("/workflows/gallery-build.yml"): return {"id": 4}
             if "/pulls/" in path: return pull()
             raise AssertionError(path)
-        with patch.object(pages, "github_request", side_effect=api), patch.object(pages, "authorization", return_value={"comment_id": 7, "actor_id": 2}), patch.object(pages, "github_pages", return_value=[{"number":12}]):
+        with patch.object(pages, "github_request", side_effect=api), patch.object(pages, "authorization", return_value={"comment_id": None, "actor_id": 2, "kind": "rerun"}), patch.object(pages, "github_pages", return_value=[{"number":12}]):
             self.assertEqual(pages.resolve_build_run({"workflow_run": run})["pr_number"], 12)
         with patch.object(pages, "github_request", side_effect=api), patch.object(pages, "github_pages", return_value=[]):
             self.assertIsNone(pages.resolve_build_run({"workflow_run": run}))
-        with patch.object(pages, "github_request", side_effect=api), patch.object(pages, "authorization", return_value={"comment_id": 7, "actor_id": 2}), patch.object(pages, "github_pages", return_value=[{"number":12}, {"number":13}]):
+        with patch.object(pages, "github_request", side_effect=api), patch.object(pages, "authorization", return_value={"comment_id": None, "actor_id": 2, "kind": "rerun"}), patch.object(pages, "github_pages", return_value=[{"number":12}, {"number":13}]):
             self.assertIsNone(pages.resolve_build_run({"workflow_run": run}))
 
     def test_stale_attempt_and_wrong_head_repo_denied(self):
@@ -124,8 +113,9 @@ class ControlTests(unittest.TestCase):
             self.assertTrue(pages.main_is_newer({"sha":SHA}, {"sha":"b" * 40}))
 
     def test_artifact_must_match_attempt_and_run(self):
-        run = dict(run_id=10, run_attempt=2, sha=SHA)
-        artifact = dict(id=20, name="gallery-10-2", expired=False, workflow_run={"id":10,"head_sha":SHA})
+        run = dict(run_id=10, run_attempt=2, sha=SHA, run_started_at="2026-10-08T12:01:00Z")
+        artifact = dict(id=20, name="gallery-10-2", expired=False, created_at="2026-10-08T12:02:00Z",
+                        workflow_run={"id":10,"head_sha":SHA})
         with patch.object(pages, "github_request", return_value={"artifacts":[artifact]}):
             self.assertEqual(pages.run_artifact(run)["id"], 20)
         with patch.object(pages, "github_request", return_value={"artifacts":[artifact, artifact]}):
@@ -150,7 +140,7 @@ class ControlTests(unittest.TestCase):
         body = pages.status_body(pr, {"sha": SHA, "run_id": 10}, "https://example.test/repo/")
         self.assertIn("out of date", body)
         self.assertIn(SHA, body)
-        self.assertIn("/preview " + "b" * 40, body)
+        self.assertNotIn("/preview ", body)
 
 
 if __name__ == "__main__":
