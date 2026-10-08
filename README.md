@@ -416,3 +416,5 @@ The gallery build workflow also performs the regular release/wheel build with
 `build/gallery` present and checks that no gallery files enter the Python package.
 
 <!-- Gallery native rerun acceptance A -->
+
+<!-- Gallery native rerun acceptance B -->
