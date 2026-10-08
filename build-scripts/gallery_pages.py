@@ -396,7 +396,7 @@ def status_body(pr: dict, published: dict | None, url: str, phase: str = "", *,
         "Build skipped": ("🟡", "The automatic build was skipped. A maintainer can build this commit manually."),
         "Build failed": ("🔴", "The latest commit could not be built. Check the build log before trying again."),
         "Deployment failed": ("🔴", "The build completed, but the preview could not be published."),
-        "Preview cleanup pending": ("⚪", "This pull request is closed. Its preview is being removed."),
+        "Preview cleanup pending": ("⚪", "This pull request is closed. Its preview will be removed by the next successful deployment."),
         "Preview removed": ("⚪", "This pull request is closed and its preview has been removed."),
     }[label]
     status = (f"![Ready](https://raw.githubusercontent.com/{repository()}/main/.github/gallery-preview-ready.svg)"
