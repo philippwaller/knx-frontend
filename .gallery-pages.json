@@ -2,7 +2,7 @@
   "comments": {
     "6": 6048936137
   },
-  "deployment_pending": false,
+  "deployment_pending": true,
   "deployment_run": "37707977204/1",
   "main": {
     "actor_id": 1090452,
@@ -12,29 +12,7 @@
     "run_id": 37702525520,
     "sha": "629460c104d39d169b483221b6e1205af91410ed"
   },
-  "previews": {
-    "6": {
-      "actor_id": 1090452,
-      "artifact_id": 11520766194,
-      "changes": {
-        "components": [
-          {
-            "id": "knx-device-picker",
-            "title": "Device picker"
-          },
-          {
-            "id": "knx-single-address-selector",
-            "title": "Single address selector"
-          }
-        ],
-        "shared": false
-      },
-      "comment_id": null,
-      "run_attempt": 1,
-      "run_id": 37706479956,
-      "sha": "f549f0284a9cb85a1c16aa4ac7ccb7ac251ef71f"
-    }
-  },
+  "previews": {},
   "published_commit": "75713c0b9cfbc20d5ae9aa7c46b2a76469ac9e6a",
   "repository": "philippwaller/knx-frontend",
   "requests": {},
