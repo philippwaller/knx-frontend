@@ -372,14 +372,13 @@ def current_build(pr: dict) -> dict | None:
 
 def status_body(pr: dict, published: dict | None, url: str, phase: str = "", *,
                 build: dict | None = None, approved=False) -> str:
-    body = "<!-- knx-gallery-preview -->\n### Gallery preview\n\n"
     ready = published is not None and published["sha"] == pr["head"]["sha"]
     if pr["state"] == "closed":
         label = "Preview cleanup pending" if published or phase else "Preview removed"
     elif ready:
         label = "Ready"
     elif phase:
-        label = phase
+        label = phase.removesuffix(".")
     elif not approved:
         label = "Awaiting maintainer approval"
     elif build and build["status"] != "completed":
@@ -388,31 +387,44 @@ def status_body(pr: dict, published: dict | None, url: str, phase: str = "", *,
         label = "Build failed"
     else:
         label = "Publishing" if build else "Waiting for Gallery build"
-    body += f"**{label}**\n\n"
-    if pr["state"] == "open" and not ready:
-        sha = pr["head"]["sha"]
-        body += f"Current commit: [{sha[:7]}](https://github.com/{repository()}/commit/{sha}). "
-        target = f"actions/runs/{build['id']}" if build else "actions/workflows/gallery-build.yml"
-        body += f"[Gallery build](https://github.com/{repository()}/{target}).\n\n"
-        if build and (not approved or label in {"Build failed", "Build skipped"}):
-            body += "A maintainer can select **Re-run all jobs** in the linked Gallery build to build and publish "
-            body += "the preview for this commit.\n\n"
-            if not approved:
-                body += "New commits need a new maintainer run.\n\n"
-            body += "If the run no longer allows a re-run, edit the PR description to create a fresh run.\n\n"
-        elif not build:
-            body += "Waiting for a matching Gallery build. Approve the fork workflow in Actions if GitHub requests it.\n\n"
+    icon, explanation = {
+        "Ready": ("🟢", "This preview matches the latest commit in this pull request."),
+        "Awaiting maintainer approval": ("🟡", "This pull request cannot publish a preview automatically. A maintainer can start the build."),
+        "Building": ("🔵", "The latest commit is being built. This comment will update when the preview is published."),
+        "Publishing": ("🔵", "The build is complete. The preview is being published."),
+        "Waiting for Gallery build": ("🟡", "Waiting for a Gallery build for the latest commit."),
+        "Build skipped": ("🟡", "The automatic build was skipped. A maintainer can build this commit manually."),
+        "Build failed": ("🔴", "The latest commit could not be built. Check the build log before trying again."),
+        "Deployment failed": ("🔴", "The build completed, but the preview could not be published."),
+        "Preview cleanup pending": ("⚪", "This pull request is closed. Its preview will be removed by the next successful deployment."),
+        "Preview removed": ("⚪", "This pull request is closed and its preview has been removed."),
+    }[label]
+    status = (f"![Ready](https://raw.githubusercontent.com/{repository()}/main/.github/gallery-preview-ready.svg)"
+              if label == "Ready" else f"{icon} {label}")
+    body = f"<!-- knx-gallery-preview -->\n### Gallery preview · {status}\n\n{explanation}\n\n"
+    build_url = f"https://github.com/{repository()}/actions/runs/{build['id']}" if build else None
+    pending = pr["state"] == "open" and not ready
+    rerunnable = pending and build and (not approved or label in {"Build failed", "Build skipped", "Deployment failed"})
+    if pending:
+        if rerunnable:
+            body += f"**[Open Gallery build →]({build_url})** · Select **Re-run all jobs** to build and publish this commit.\n\n"
+        elif build_url:
+            body += f"[View build →]({build_url})\n\n"
+        else:
+            body += f"[Open Gallery workflow →](https://github.com/{repository()}/actions/workflows/gallery-build.yml)\n\n"
     if published:
         stale = published["sha"] != pr["head"]["sha"]
-        body += f"[Open preview]({url.rstrip('/')}/pr/{pr['number']}/)"
-        body += " — out of date.\n\n" if stale else "\n\n"
-        body += f"Published commit: [{published['sha'][:7]}](https://github.com/{repository()}/commit/{published['sha']}). "
-        body += f"[Build](https://github.com/{repository()}/actions/runs/{published['run_id']}).\n\n"
+        preview_url = f"{url.rstrip('/')}/pr/{pr['number']}/"
+        if stale:
+            body += f"**[Open previous preview →]({preview_url})** · This preview is out of date and shows an earlier commit.\n\n"
+        else:
+            body += f"**[Open preview →]({preview_url})** · [View build](https://github.com/{repository()}/actions/runs/{published['run_id']})\n\n"
         changes = published.get("changes")
         if changes is not None:
             site.validate_preview_changes(changes)
-            body += f"**Changed components ({len(changes['components'])})**\n\n"
-            body += "Changes in the published preview relative to main.\n\n"
+        if changes and (changes["components"] or changes["shared"]):
+            heading = "Components in the previous preview" if stale else "Changed components"
+            body += f"**{heading} · {len(changes['components'])}**\n\n" if changes["components"] else "**Shared Gallery changes**\n\n"
             link_length = 0
             for index, entry in enumerate(changes["components"]):
                 # Treat catalog titles as untrusted text, including Markdown and mentions.
@@ -428,9 +440,21 @@ def status_body(pr: dict, published: dict | None, url: str, phase: str = "", *,
                 link_length += len(link)
             if changes["shared"]:
                 body += "\nShared changes to styles, helpers, fixtures or build inputs may affect multiple examples.\n"
-            elif not changes["components"]:
-                body += "No component changes detected.\n"
             body += "\n"
+    body += "<details>\n<summary>Build details</summary>\n\n"
+    sha = pr["head"]["sha"]
+    body += f"Current commit: [{sha[:7]}](https://github.com/{repository()}/commit/{sha}).\n\n"
+    if published:
+        body += f"Published commit: [{published['sha'][:7]}](https://github.com/{repository()}/commit/{published['sha']}). "
+        body += f"[Published build](https://github.com/{repository()}/actions/runs/{published['run_id']}).\n\n"
+        body += "Component links refer to this published preview and its changes relative to main.\n\n"
+    if rerunnable:
+        if not approved:
+            body += "Each new commit needs a new maintainer run.\n\n"
+        body += "If the run no longer allows a re-run, edit the PR description to create a fresh run.\n\n"
+    elif pending and not build:
+        body += "Approve the fork workflow in Actions if GitHub requests it.\n\n"
+    body += "</details>\n"
     return body
 
 
