@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'build-scripts'))
 import gallery_pages as pages
-from test_gallery_pages import SHA, pull, comment
+from test_gallery_pages import SHA, pull
 
 
 class ControlFlowTests(unittest.TestCase):
@@ -185,32 +185,13 @@ class ControlFlowTests(unittest.TestCase):
                 pages.verify_deployment(self.candidate)
         self.assertEqual(self.store.state["published_commit"], self.old)
 
-    def test_comment_during_gate_reruns_once(self):
-        self.store.state['previews'] = {}
-        run = dict(id=10, run_attempt=1, status='in_progress', head_repository={'id':99})
-        posts = []
-        def api(method, path, body=None):
-            if method == 'POST':
-                self.assertTrue(self.store.state['requests']['12']['rerun'])
-                stored = json.loads(pages.git('show', 'HEAD:' + pages.site.STATE, cwd=self.store.root))
-                self.assertTrue(stored['requests']['12']['rerun'])
-                posts.append(path); return None
-            return {'workflow_runs': [run]}
-        with patch.object(pages, 'permission', return_value='write'), patch.object(pages, 'github_request', side_effect=api):
-            self.assertEqual(pages.request_preview(pull(), comment(), self.store, pages.site.empty_state('owner/repo')), 'running')
-            run['status'] = 'completed'
-            self.assertEqual(pages.request_preview(pull(), comment(), self.store, pages.site.empty_state('owner/repo')), 'started')
-            self.assertEqual(pages.request_preview(pull(), comment(), self.store, pages.site.empty_state('owner/repo')), 'waiting')
-        self.assertEqual(posts, ['/repos/owner/repo/actions/runs/10/rerun'])
-
-    def test_rerun_http_failure_is_visible_without_automatic_retry(self):
-        self.store.state['previews'] = {}
-        def api(method, path, body=None):
-            if method == 'POST': raise urllib.error.HTTPError('https://api.github.com', 422, 'expired', {}, None)
-            return {'workflow_runs': [dict(id=10, run_attempt=1, status='completed', head_repository={'id':99})]}
-        with patch.object(pages, 'permission', return_value='write'), patch.object(pages, 'github_request', side_effect=api):
-            self.assertEqual(pages.request_preview(pull(), comment(), self.store, pages.site.empty_state('owner/repo')), 'retry_failed')
-            self.assertEqual(pages.request_preview(pull(), comment(), self.store, pages.site.empty_state('owner/repo')), 'waiting')
+    def test_old_preview_commands_cannot_mutate_deployment_state(self):
+        before = pages.git("rev-parse", "HEAD", cwd=self.store.root)
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "issue_comment"}):
+            pages.prepare({"issue": {"number": 12, "pull_request": {}},
+                           "comment": {"body": "/preview " + SHA}})
+        self.assertEqual(pages.git("rev-parse", "HEAD", cwd=self.store.root), before)
+        self.assertEqual((self.root / "outputs").read_text(), "deploy=false\n")
 
     def test_download_redirect_drops_authorization(self):
         data = b'archive'

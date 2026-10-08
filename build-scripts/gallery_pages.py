@@ -2,6 +2,7 @@
 """Trusted gallery control plane. Standard library only; never run PR code here."""
 import argparse
 import base64
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -18,11 +19,6 @@ import urllib.request
 import gallery_pages_site as site
 
 
-def parse_preview_request(body: str) -> str | None:
-    match = re.fullmatch(r"/preview ([a-fA-F0-9]{40})", body.strip())
-    return match[1].lower() if match else None
-
-
 def is_maintainer(permission: str) -> bool:
     return permission in {"write", "maintain", "admin"}
 
@@ -31,20 +27,19 @@ def same_head(sha: str, pr: dict) -> bool:
     return bool(re.fullmatch(r"[a-f0-9]{40}", sha)) and sha == pr["head"]["sha"]
 
 
-def authorize_preview(pr: dict, author_permission: str, comments: list[dict],
-                      permissions: dict[int, str]) -> dict | None:
+def authorize_preview(pr: dict, author_permission: str, run: dict | None = None,
+                      triggering_permission: str = "") -> dict | None:
     if pr["state"] != "open" or pr["base"]["ref"] != "main" or pr["head"]["repo"] is None:
         return None
     sha = pr["head"]["sha"]
     if not same_head(sha, pr):
         raise ValueError("Invalid PR head")
+    if (run and run["run_attempt"] > 1 and run["event"] == "pull_request"
+            and run["head_sha"] == sha and run["head_repository"]["id"] == pr["head"]["repo"]["id"]
+            and run.get("triggering_actor") and is_maintainer(triggering_permission)):
+        return dict(kind="rerun", sha=sha, comment_id=None, actor_id=run["triggering_actor"]["id"])
     if is_maintainer(author_permission):
         return dict(kind="maintainer", sha=sha, comment_id=None, actor_id=pr["user"]["id"])
-    for comment in reversed(comments):
-        if (comment["created_at"] == comment["updated_at"]
-                and parse_preview_request(comment["body"]) == sha
-                and is_maintainer(permissions.get(comment["user"]["id"], ""))):
-            return dict(kind="comment", sha=sha, comment_id=comment["id"], actor_id=comment["user"]["id"])
     return None
 
 
@@ -107,12 +102,10 @@ def permission(user: dict) -> str:
     return github_request("GET", repo_path(f"/collaborators/{login}/permission"))["permission"]
 
 
-def authorization(pr: dict) -> dict | None:
-    role = permission(pr["user"])
-    comments = [] if is_maintainer(role) else github_pages(repo_path(f"/issues/{int(pr['number'])}/comments"))
-    roles = {c["user"]["id"]: permission(c["user"]) for c in comments
-             if parse_preview_request(c["body"]) == pr["head"]["sha"] and c["created_at"] == c["updated_at"]}
-    return authorize_preview(pr, role, comments, roles)
+def authorization(pr: dict, run: dict | None = None) -> dict | None:
+    actor = (run or {}).get("triggering_actor")
+    role = permission(actor) if run and run["run_attempt"] > 1 and actor else ""
+    return authorize_preview(pr, permission(pr["user"]), run, role)
 
 
 def git(*args, cwd=None) -> str:
@@ -229,7 +222,7 @@ def pages_base() -> str:
     return path if path.endswith("/") else path + "/"
 
 
-def resolve_build_run(event: dict) -> dict | None:
+def resolve_build_run(event: dict, *, status_only=False) -> dict | None:
     notice = event["workflow_run"]
     run = github_request("GET", repo_path(f"/actions/runs/{int(notice['id'])}"))
     workflow = github_request("GET", repo_path("/actions/workflows/gallery-build.yml"))
@@ -240,7 +233,7 @@ def resolve_build_run(event: dict) -> dict | None:
         return None
     result = dict(sha=run["head_sha"], run_id=run["id"], run_attempt=run["run_attempt"],
                   artifact_id=0, comment_id=None, actor_id=run["actor"]["id"],
-                  conclusion=run["conclusion"], status=run["status"])
+                  conclusion=run["conclusion"], status=run["status"], run_started_at=run["run_started_at"])
     if run["event"] == "push":
         if (run["head_branch"] != "main" or run["head_repository"]["id"] != run["repository"]["id"]):
             return None
@@ -249,12 +242,15 @@ def resolve_build_run(event: dict) -> dict | None:
     matches = []
     for item in related:
         pr = github_request("GET", repo_path(f"/pulls/{int(item['number'])}"))
-        if (same_head(run["head_sha"], pr) and pr["head"]["repo"] is not None
+        if (pr["state"] == "open" and pr["base"]["ref"] == "main"
+                and same_head(run["head_sha"], pr) and pr["head"]["repo"] is not None
                 and pr["head"]["repo"]["id"] == run["head_repository"]["id"]):
-            auth = authorization(pr)
-            if auth:
+            # Unapproved runs may update their PR's status, never supply a candidate.
+            auth = authorization(pr, run) if not status_only else None
+            if auth or status_only:
                 matches.append(dict(result, target="pr", pr_number=pr["number"],
-                                    comment_id=auth["comment_id"], actor_id=auth["actor_id"]))
+                                    comment_id=None, actor_id=auth["actor_id"] if auth else run["actor"]["id"],
+                                    authorization_kind=auth["kind"] if auth else None))
     return matches[0] if len(matches) == 1 else None
 
 
@@ -270,8 +266,13 @@ def run_artifact(run: dict) -> dict | None:
         raise ValueError("Too many artifacts")
     if len(matches) > 1:
         raise ValueError("Ambiguous build artifact")
+    # PR code controls artifact names. GitHub's timestamps must also place the
+    # upload after this attempt began. Reject equal timestamps (one-second API
+    # precision); a real Gallery build takes longer than the start second.
     if matches and (matches[0]["workflow_run"]["id"] != run["run_id"]
-                    or matches[0]["workflow_run"]["head_sha"] != run["sha"]):
+                    or matches[0]["workflow_run"]["head_sha"] != run["sha"]
+                    or datetime.fromisoformat(matches[0]["created_at"]) <=
+                       datetime.fromisoformat(run["run_started_at"])):
         raise ValueError("Artifact provenance mismatch")
     return matches[0] if matches else None
 
@@ -351,18 +352,67 @@ def preview_changes(run: dict, candidate: Path) -> dict | None:
     return {"components": sorted(selected.values(), key=lambda entry: entry["id"]), "shared": shared}
 
 
-def status_body(pr: dict, published: dict | None, url: str, phase: str = "") -> str:
+def current_build(pr: dict) -> dict | None:
+    data = github_request("GET", repo_path("/actions/workflows/gallery-build.yml/runs?event=pull_request&head_sha="
+                                           + pr["head"]["sha"] + "&per_page=100"))
+    runs = [run for run in data["workflow_runs"] if run["event"] == "pull_request"
+            and run["head_sha"] == pr["head"]["sha"] and run.get("head_repository")
+            and run["head_repository"]["id"] == pr["head"]["repo"]["id"]
+            and (not run["pull_requests"] or any(item["number"] == pr["number"] for item in run["pull_requests"]))]
+    if any(not run["pull_requests"] for run in runs):
+        related = github_pages(repo_path("/pulls?state=open&base=main"))
+        matching = [item["number"] for item in related if item["state"] == "open"
+                    and item["base"]["ref"] == "main" and same_head(pr["head"]["sha"], item)
+                    and item["head"]["repo"] is not None
+                    and item["head"]["repo"]["id"] == pr["head"]["repo"]["id"]]
+        if matching != [pr["number"]]:
+            runs = [run for run in runs if run["pull_requests"]]
+    return max(runs, key=lambda run: (run.get("run_started_at", ""), run["id"], run["run_attempt"])) if runs else None
+
+
+def status_body(pr: dict, published: dict | None, url: str, phase: str = "", *,
+                build: dict | None = None, approved=False) -> str:
     body = "<!-- knx-gallery-preview -->\n### Gallery preview\n\n"
+    ready = published is not None and published["sha"] == pr["head"]["sha"]
+    if pr["state"] == "closed":
+        label = "Preview cleanup pending" if published or phase else "Preview removed"
+    elif ready:
+        label = "Ready"
+    elif phase:
+        label = phase
+    elif not approved:
+        label = "Awaiting maintainer approval"
+    elif build and build["status"] != "completed":
+        label = "Building"
+    elif build and build["conclusion"] != "success":
+        label = "Build failed"
+    else:
+        label = "Publishing" if build else "Waiting for Gallery build"
+    body += f"**{label}**\n\n"
+    if pr["state"] == "open" and not ready:
+        sha = pr["head"]["sha"]
+        body += f"Current commit: [{sha[:7]}](https://github.com/{repository()}/commit/{sha}). "
+        target = f"actions/runs/{build['id']}" if build else "actions/workflows/gallery-build.yml"
+        body += f"[Gallery build](https://github.com/{repository()}/{target}).\n\n"
+        if build and (not approved or label in {"Build failed", "Build skipped"}):
+            body += "A maintainer can select **Re-run all jobs** in the linked Gallery build to build and publish "
+            body += "the preview for this commit.\n\n"
+            if not approved:
+                body += "New commits need a new maintainer run.\n\n"
+            body += "If the run no longer allows a re-run, edit the PR description to create a fresh run.\n\n"
+        elif not build:
+            body += "Waiting for a matching Gallery build. Approve the fork workflow in Actions if GitHub requests it.\n\n"
     if published:
         stale = published["sha"] != pr["head"]["sha"]
         body += f"[Open preview]({url.rstrip('/')}/pr/{pr['number']}/)"
         body += " — out of date.\n\n" if stale else "\n\n"
-        body += f"Published commit: `{published['sha']}`. "
+        body += f"Published commit: [{published['sha'][:7]}](https://github.com/{repository()}/commit/{published['sha']}). "
         body += f"[Build](https://github.com/{repository()}/actions/runs/{published['run_id']}).\n\n"
         changes = published.get("changes")
         if changes is not None:
             site.validate_preview_changes(changes)
-            body += "#### Changed components\n\nChanges in the published preview relative to main.\n\n"
+            body += f"**Changed components ({len(changes['components'])})**\n\n"
+            body += "Changes in the published preview relative to main.\n\n"
             link_length = 0
             for index, entry in enumerate(changes["components"]):
                 # Treat catalog titles as untrusted text, including Markdown and mentions.
@@ -381,17 +431,10 @@ def status_body(pr: dict, published: dict | None, url: str, phase: str = "") -> 
             elif not changes["components"]:
                 body += "No component changes detected.\n"
             body += "\n"
-    else:
-        body += "Preview removed.\n\n" if pr["state"] == "closed" else "No preview published.\n\n"
-    if phase:
-        body += phase + "\n\n"
-    if pr["state"] == "open":
-        body += f"A maintainer can request this exact commit:\n\n```text\n/preview {pr['head']['sha']}\n```\n"
-        body += "New commits require a new approval for external contributors."
     return body
 
 
-def update_status(store: Store, pr: dict, published: dict | None, phase=""):
+def update_status(store: Store, pr: dict, published: dict | None, phase="", *, phase_run=None):
     number = str(pr["number"])
     comments = github_pages(repo_path(f"/issues/{number}/comments"))
     own = [c for c in comments if c["user"]["id"] == 41898282 and c["user"]["type"] == "Bot"
@@ -404,7 +447,13 @@ def update_status(store: Store, pr: dict, published: dict | None, phase=""):
     if len(own) > 1:
         raise ValueError("Ambiguous preview status comments")
     url = github_request("GET", repo_path("/pages"))["html_url"]
-    body = status_body(pr, published, url, phase)
+    pending = pr["state"] == "open" and (published is None or published["sha"] != pr["head"]["sha"])
+    build = current_build(pr) if pending and pr["head"]["repo"] else None
+    approved = authorization(pr, build) is not None if pending else False
+    if phase_run and (build is None or (build["id"], build["run_attempt"]) !=
+                      (phase_run["run_id"], phase_run["run_attempt"])):
+        phase = ""
+    body = status_body(pr, published, url, phase, build=build, approved=approved)
     if own:
         if own[0]["body"] != body:
             github_request("PATCH", repo_path(f"/issues/comments/{own[0]['id']}"), {"body": body})
@@ -412,40 +461,6 @@ def update_status(store: Store, pr: dict, published: dict | None, phase=""):
     else:
         identifier = github_request("POST", repo_path(f"/issues/{number}/comments"), {"body": body})["id"]
     store.state["comments"][number] = identifier
-
-
-def request_preview(pr: dict, comment: dict, store: Store, published: dict) -> str:
-    if (pr["state"] != "open" or pr["base"]["ref"] != "main"
-            or comment["created_at"] != comment["updated_at"]
-            or parse_preview_request(comment["body"]) != pr["head"]["sha"]
-            or not is_maintainer(permission(comment["user"]))):
-        return "denied"
-    number = str(pr["number"])
-    if published["previews"].get(number, {}).get("sha") == pr["head"]["sha"]:
-        return "published"
-    if store.state["previews"].get(number, {}).get("sha") == pr["head"]["sha"]:
-        return "recover"
-    data = github_request("GET", repo_path("/actions/workflows/gallery-build.yml/runs?event=pull_request&head_sha=" + pr["head"]["sha"]))
-    runs = [r for r in data["workflow_runs"] if r["head_repository"]["id"] == pr["head"]["repo"]["id"]]
-    marker = store.state["requests"].get(number, {})
-    if not runs:
-        store.state["requests"][number] = dict(comment_id=comment["id"], sha=pr["head"]["sha"], rerun=False)
-        return "waiting"
-    run = max(runs, key=lambda r: (r["id"], r["run_attempt"]))
-    if marker.get("comment_id") == comment["id"] and marker.get("rerun"):
-        return "running" if run["status"] != "completed" else "waiting"
-    marker = dict(comment_id=comment["id"], sha=pr["head"]["sha"], run_id=run["id"],
-                  attempt=run["run_attempt"], rerun=run["status"] == "completed")
-    store.state["requests"][number] = marker
-    store.save("Record gallery preview request")
-    if run["status"] != "completed":
-        return "running"
-    try:
-        github_request("POST", repo_path(f"/actions/runs/{run['id']}/rerun"))
-    except (urllib.error.URLError, TimeoutError):
-        # Persisted before the API call: an ambiguous response never loops.
-        return "retry_failed"
-    return "started"
 
 
 def published_remote_state() -> dict:
@@ -487,27 +502,11 @@ def prepare(event: dict):
     name = os.environ["GITHUB_EVENT_NAME"]
     if os.environ["GITHUB_REF"] != "refs/heads/main":
         raise ValueError("Publisher must run from main")
-    # Ordinary issue comments must not start state mutations or deployment work.
-    if name == "issue_comment" and ("pull_request" not in event["issue"]
-            or not parse_preview_request(event["comment"]["body"])):
+    if name not in {"pull_request_target", "workflow_run", "workflow_dispatch"}:
         return
     store = Store()
     public, confirmed = store.published()
-    if name == "issue_comment":
-        number = int(event["issue"]["number"])
-        pr = github_request("GET", repo_path(f"/pulls/{number}"))
-        comment = github_request("GET", repo_path(f"/issues/comments/{int(event['comment']['id'])}"))
-        result = request_preview(pr, comment, store, confirmed)
-        if result == "denied":
-            return
-        phases = {"retry_failed": "The rerun could not be confirmed. Check Actions first; submit a new approval comment to retry. If the run has expired, edit the PR description to create a fresh run.", "started": "Build requested.", "running": "Build running or queued.",
-                  "waiting": "Waiting for a matching PR run. Approve the fork workflow if GitHub requests it. If the old run cannot be repeated, edit the PR description to create a fresh run.",
-                  "published": "This commit is already published.", "recover": "Retrying the saved deployment."}
-        update_status(store, pr, confirmed["previews"].get(str(number)), phases[result])
-        store.save("Update gallery preview request status")
-        if result != "recover":
-            return
-    elif name == "pull_request_target":
+    if name == "pull_request_target":
         pr = github_request("GET", repo_path(f"/pulls/{int(event['number'])}"))
         number = str(pr["number"])
         if pr["state"] == "open" and (number in store.state["comments"] or relevant(pr)):
@@ -519,19 +518,20 @@ def prepare(event: dict):
     incoming = None
     if name == "workflow_run":
         incoming = resolve_build_run(event)
+        status_run = incoming or resolve_build_run(event, status_only=True)
+        if status_run and status_run["target"] == "pr" and (incoming is None or status_run["status"] != "completed"):
+            number = str(status_run["pr_number"])
+            pr = github_request("GET", repo_path(f"/pulls/{number}"))
+            update_status(store, pr, confirmed["previews"].get(number))
+            store.save("Update gallery build status")
+            return
         if incoming and incoming["target"] == "pr":
             number = str(incoming["pr_number"])
             pr = github_request("GET", repo_path(f"/pulls/{number}"))
             artifact = run_artifact(incoming) if incoming["conclusion"] == "success" else None
             if artifact is None and confirmed["previews"].get(number, {}).get("sha") != incoming["sha"]:
-                marker = store.state["requests"].get(number)
-                if marker and marker["sha"] == incoming["sha"] and not marker["rerun"]:
-                    comment = github_request("GET", repo_path(f"/issues/comments/{marker['comment_id']}"))
-                    request_preview(pr, comment, store, confirmed)
-                phase = "Build failed. A maintainer may submit a new request for this commit."
-                if incoming["conclusion"] == "success":
-                    phase = "No gallery artifact was produced; waiting for an approved build."
-                update_status(store, pr, confirmed["previews"].get(number), phase)
+                phase = "Build skipped" if incoming["conclusion"] == "success" else "Build failed"
+                update_status(store, pr, confirmed["previews"].get(number), phase, phase_run=incoming)
                 store.save("Record gallery build result")
             if artifact is None:
                 incoming = None
@@ -665,8 +665,9 @@ def finish(result: str, state_commit: str, deployment_run: str):
     # Commit confirmation before comments: a comment error cannot erase deploy success.
     for number in set(store.state["comments"]) | set(store.state["previews"]):
         pr = github_request("GET", repo_path(f"/pulls/{int(number)}"))
-        phase = "" if result == "success" else "Deployment failed; the last published preview remains available."
-        update_status(store, pr, confirmed["previews"].get(number), phase)
+        phase = "" if result == "success" else "Deployment failed"
+        update_status(store, pr, confirmed["previews"].get(number), phase,
+                      phase_run=store.state["previews"].get(number) if phase else None)
     store.save("Update deployed gallery preview links")
 
 
@@ -684,15 +685,16 @@ def gate(event: dict):
     pr = github_request("GET", repo_path(f"/pulls/{int(original['number'])}"))
     if not same_head(original["head"]["sha"], pr):
         return
-    auth = authorization(pr)
-    if not auth:
+    run = resolve_build_run({"workflow_run": {"id": int(os.environ["GITHUB_RUN_ID"]),
+                                              "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"])}})
+    if run is None or run["target"] != "pr" or run["pr_number"] != pr["number"] or run["sha"] != original["head"]["sha"]:
         return
     previous = published_remote_state()["previews"].get(str(pr["number"])) if enabled else None
-    if previous and previous["sha"] == auth["sha"]:
+    if previous and previous["sha"] == run["sha"]:
         return
-    if auth["kind"] != "comment" and not relevant(pr, previous["sha"] if previous else None):
+    if run["authorization_kind"] != "rerun" and not relevant(pr, previous["sha"] if previous else None):
         return
-    output(build=True, sha=auth["sha"], pr_number=pr["number"], base_path=f"{base}pr/{pr['number']}/" if enabled else "/")
+    output(build=True, sha=run["sha"], pr_number=pr["number"], base_path=f"{base}pr/{pr['number']}/" if enabled else "/")
 
 
 def main():

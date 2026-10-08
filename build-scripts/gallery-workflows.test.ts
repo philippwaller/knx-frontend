@@ -25,7 +25,11 @@ it("keeps PR execution outside privileged jobs", () => {
   expect(build.jobs.build.steps[0].with.ref).toBe("${{ needs.gate.outputs.sha }}");
   expect(publisher.on.pull_request_target.types).toContain("closed");
   expect(publisher.jobs.prepare.if).not.toContain("startsWith");
-  expect(publisher.on.issue_comment.types).toEqual(["created"]);
+  expect(publisher.on.issue_comment).toBeUndefined();
+  expect(publisher.on.workflow_run.types).toEqual(["in_progress", "completed"]);
+  expect(build.jobs.gate.permissions.actions).toBe("read");
+  expect(publisher.jobs.prepare.permissions.actions).toBe("read");
+  expect(publisher.jobs.finish.permissions.actions).toBe("read");
   expect(publisher.concurrency).toEqual({ group: "gallery-pages", queue: "max" });
   expect(publisher.jobs.deploy.permissions).toEqual({
     contents: "read",
