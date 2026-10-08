@@ -8,7 +8,7 @@ export const entry = defineExample({
   copy,
   properties: {
     label: "KNX device",
-    helper: "Choose a device from the offline project. Gallery live preview test B.",
+    helper: "Choose a device from the offline project. Gallery live preview test C.",
     value: "1.1.1",
   },
   events: ["value-changed", "show-dialog"],
@@ -52,5 +52,3 @@ export const entry = defineExample({
     };
   },
 });
-
-export const intentionalLiveBuildFailure = ;
