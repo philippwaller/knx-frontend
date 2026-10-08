@@ -55,11 +55,14 @@ lazily and starts no preview iframes. Clicking or pressing Enter opens the inter
 example. The development server keeps source maps in separate files.
 
 `pnpm gallery:build` builds the optimized gallery and generates all thumbnails with
-headless Chromium. Install it once with `pnpm exec playwright install chromium` (CI uses
-`--with-deps`). The capture step serves the build on port 8093, uses local fixtures,
+headless Chromium, capturing the 96 independent images with two workers. Install it
+once with `pnpm exec playwright install chromium` (CI uses `--with-deps`). The capture
+step serves the build on port 8093, uses local fixtures,
 a fixed clock, viewport, locale and timezone, and disables animations for screenshots.
-It fails the build on missing examples or rendering errors. Images stay in the ignored
-`build/gallery/thumbnails/` directory and are shipped with the gallery, not the Python package.
+The rendered acknowledgement, dialog visibility, network-idle and screenshot font-readiness
+checks remain in place. It fails the build on missing examples or rendering errors.
+Images stay in the ignored `build/gallery/thumbnails/` directory and are shipped with
+the gallery, not the Python package.
 
 For local development, run `pnpm gallery:build` once before `pnpm gallery`. After changing
 an example, rebuild to refresh its thumbnails; `pnpm gallery:thumbnails` regenerates all
@@ -240,7 +243,8 @@ pnpm gallery:test --workers=2 --grep 'components knx-dpt-option-selector'
 
 Select affected tags and interaction tests with `--grep`; run TypeScript checks without
 file arguments. `pnpm gallery:build` verifies the standalone build and refreshes its
-overview thumbnails. Report any check that was not completed or remains failing.
+overview thumbnails. Keep all 266 interactive browser cases before publication; focused
+runs support local iteration. Report any check that was not completed or remains failing.
 
 The gallery is excluded from the Python package. CI deliberately leaves
 `build/gallery/` in place, runs `KNX_BUILD_STATS=1 pnpm build` and the existing
@@ -326,6 +330,12 @@ This repository ships a set of instructions for AI coding agents.
 The gallery workflows publish `main` at the repository's Pages URL and previews at
 `<pages-url>/pr/<number>/`. The same files work in `philippwaller/knx-frontend` and
 `XKNX/knx-frontend`; the Pages API supplies the URL prefix, including a custom domain.
+
+Main compares gallery inputs against the confirmed published Main commit. A
+documentation-only push may keep the previous gallery; unpublished source, browser
+test, dependency or submodule changes still rebuild, including after a failed
+deployment. First publication, disabled publishing or unavailable baseline/Git
+evidence always builds. An already confirmed Main commit skips rebuilding.
 
 - A PR author with current **write, maintain or admin** access gets an automatic
   preview when gallery inputs change. Inputs include components, examples, build
@@ -417,6 +427,8 @@ GALLERY_BASE_PATH=/ pnpm gallery:test --workers=2
 
 The gallery build workflow compiles the gallery and generates thumbnails once,
 then shares that artifact with two parallel browser-test shards and a parallel
-release/wheel check. Each browser shard keeps two workers. The release check builds
+release/wheel check. Each browser shard keeps two workers. Gallery and release
+compilation restore separate Babel caches; only successful Main runs save them.
+A cache miss performs the same full compilation. The release check builds
 with `build/gallery` present and verifies that no gallery files enter the Python
 package. Publication waits for the entire workflow to succeed.
