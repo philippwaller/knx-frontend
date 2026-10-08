@@ -2,7 +2,7 @@
   "comments": {
     "6": 6048936137
   },
-  "deployment_pending": false,
+  "deployment_pending": true,
   "deployment_run": "37706011138/1",
   "main": {
     "actor_id": 1090452,
@@ -15,7 +15,7 @@
   "previews": {
     "6": {
       "actor_id": 1090452,
-      "artifact_id": 11519069414,
+      "artifact_id": 11520766194,
       "changes": {
         "components": [
           {
@@ -31,8 +31,8 @@
       },
       "comment_id": null,
       "run_attempt": 1,
-      "run_id": 37704533568,
-      "sha": "c8f60f93661d4e45bf15acc8da660359ca0b0bc3"
+      "run_id": 37706479956,
+      "sha": "f549f0284a9cb85a1c16aa4ac7ccb7ac251ef71f"
     }
   },
   "published_commit": "830dda6e11e074af9e0284706e5858c564f1feaf",
