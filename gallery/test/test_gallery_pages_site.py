@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "build-scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "script"))
 import gallery_pages_site as site
 
 

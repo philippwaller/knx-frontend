@@ -1,6 +1,9 @@
 // @vitest-environment node
 /* eslint-disable no-template-curly-in-string -- GitHub Actions expressions are literal workflow data. */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { load } from "js-yaml";
 import { expect, it } from "vitest";
 
@@ -79,7 +82,7 @@ it("keeps PR execution outside privileged jobs", () => {
   expect(build.jobs.gate.steps[0].with.ref).toBe("main");
   // Until main contains the gate, the PR introducing it builds like ordinary PR CI.
   const gate = build.jobs.gate.steps[1];
-  expect(gate.run).toMatch(/if \[ -f build-scripts\/gallery_pages\.py \]/);
+  expect(gate.run).toMatch(/if \[ -f gallery\/script\/gallery_pages\.py \]/);
   expect(gate.run).toContain("base_path=/");
   expect(gate.run).not.toContain("${{");
   for (const job of [build.jobs.build, build.jobs["browser-tests"], build.jobs["release-check"]]) {
@@ -137,4 +140,83 @@ it("keeps PR execution outside privileged jobs", () => {
       if (step.run) expect(step.run).not.toContain("${{ github.event.");
     }
   }
+});
+
+it("runs read-only exact-head Gallery checks without a preview gate dependency", () => {
+  const build = workflow("gallery-build");
+  expect(build.permissions).toEqual({});
+  const checks = build.jobs.checks;
+  expect(checks).toBeDefined();
+  expect(checks.needs).toBeUndefined();
+  expect(checks.if).toBeUndefined();
+  expect(checks.permissions).toEqual({ contents: "read" });
+  expect(checks.steps[0].with).toEqual({
+    ref: "${{ github.event.pull_request.head.sha || github.sha }}",
+    submodules: "recursive",
+    "persist-credentials": false,
+  });
+  const runs = checks.steps.map(({ run }: { run?: string }) => run).filter(Boolean);
+  expect(runs).toEqual([
+    "SKIP_FETCH_NIGHTLY_TRANSLATIONS=1 pnpm exec gulp gen-icons-json build-translations build-locale-data",
+    "pnpm gallery:policy",
+    "pnpm gallery:lint",
+    "pnpm gallery:types",
+    "pnpm gallery:unit",
+  ]);
+  expect(JSON.stringify(checks)).not.toMatch(/secrets\.|needs\.gate/);
+});
+
+it("requires successful checks as well as preview approval before building", () => {
+  const build = workflow("gallery-build").jobs.build;
+  expect(build.needs).toEqual(["gate", "checks"]);
+  expect(build.if).toBe("needs.gate.outputs.build == 'true'");
+});
+
+it.each([
+  ["new", ["gallery/script/gallery_pages.py"], "new\n"],
+  ["legacy", ["build-scripts/gallery_pages.py"], "legacy\n"],
+  ["both", ["gallery/script/gallery_pages.py", "build-scripts/gallery_pages.py"], "new\n"],
+  ["bootstrap", [], "build=true\nsha=fixture-head\nbase_path=/\n"],
+])("selects the %s trusted Main gate", (_name, paths, expected) => {
+  const gate = workflow("gallery-build").jobs.gate;
+  expect(gate.steps[0].with.ref).toBe("main");
+  expect(gate.steps[0].with["persist-credentials"]).toBe(false);
+  const root = mkdtempSync(join(tmpdir(), "gallery-gate-"));
+  const output = join(root, "output");
+  try {
+    for (const path of paths) {
+      const target = join(root, path);
+      mkdirSync(join(target, ".."), { recursive: true });
+      writeFileSync(
+        target,
+        `import os, sys\nassert sys.argv[1:] == ["gate"]\nwith open(os.environ["GITHUB_OUTPUT"], "a") as f: f.write("${path.startsWith("gallery/") ? "new" : "legacy"}\\n")\n`,
+      );
+    }
+    execFileSync("bash", ["-eu", "-c", gate.steps[1].run], {
+      cwd: root,
+      env: { ...process.env, GITHUB_OUTPUT: output, HEAD_SHA: "fixture-head" },
+    });
+    expect(readFileSync(output, "utf8")).toBe(expected);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it("keeps product CI free of Gallery-only checks while retaining wheel and size checks", () => {
+  const ci = workflow("ci");
+  expect(JSON.stringify(ci)).not.toMatch(/gallery|build-locale-data|KNX_BUILD_STATS/);
+  expect(ci.jobs.build.steps.some(({ run }: { run?: string }) => run === "pnpm build")).toBe(true);
+  expect(ci.jobs.build.steps.some(({ name }: { name?: string }) => name === "Build wheel")).toBe(
+    true,
+  );
+  expect(ci.jobs.size.needs).toBe("build");
+  expect(
+    ci.jobs.types.steps.some(
+      ({ run }: { run?: string }) => run === "pnpm exec gulp gen-icons-json build-translations",
+    ),
+  ).toBe(true);
+  expect(
+    ci.jobs.coverage.steps.find(({ uses }: { uses?: string }) => uses?.startsWith("codecov/")).with
+      .directory,
+  ).toBe("./test/coverage");
 });

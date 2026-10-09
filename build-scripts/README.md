@@ -38,23 +38,6 @@ In production, the following responsibilities are added:
 
 Configuration for all these steps are specified in [bundle.js](bundle.js).
 
-## Gallery compiler caches
-
-The read-only Gallery workflow restores Babel caches into `runner.temp/babel-loader`
-for both Gallery compilation and the release check. Each job has its own cache key,
-including the runner OS, Node version file, dependency lockfile, workspace manifest
-and exact gated commit SHA. Restore first uses the matching Gallery job prefix, then
-the regular CI Babel cache for the same OS and lockfile. A cache miss compiles normally.
-Only successful push-to-Main compilation steps prune entries older than 30 days and
-save compiler caches; PR jobs only restore them. The privileged Pages publisher never
-restores caches. Superseded runs for the same PR are cancelled; Main runs retain unique
-concurrency groups, and the publisher retains its queue.
-
-The release check intentionally keeps its full build and wheel exclusion proof with
-the actual Gallery output present. Regular PR CI builds a merge commit, while Gallery
-validates the gated PR head, so its release output cannot replace this check. Compiler
-caching speeds that work without changing the job graph or full browser regression suite.
-
 ## Output size
 
 The published wheel is `knx_frontend/` zipped up, so build output size is what every Home

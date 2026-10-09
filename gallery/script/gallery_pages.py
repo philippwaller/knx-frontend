@@ -52,8 +52,9 @@ def has_gallery_changes(paths: list[str]) -> bool:
              ".nvmrc", "tsconfig.json", ".browserslistrc", "rspack.config.cjs", "gulpfile.js",
              "config.js", "VERSION", "test/gallery-thumbnails.ts", "test/gallery.e2e.ts",
              "test/gallery-pages.e2e.ts"}
-    return any(path in files or path.startswith(prefixes)
-               or re.fullmatch(r"test/playwright\.gallery[^/]*\.config\.ts", path) for path in paths)
+    docs = {"gallery/README.md"}
+    return any(path not in docs and (path in files or path.startswith(prefixes)
+               or re.fullmatch(r"test/playwright\.gallery[^/]*\.config\.ts", path)) for path in paths)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):

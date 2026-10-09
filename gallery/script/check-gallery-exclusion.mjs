@@ -3,31 +3,6 @@ import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 
-export const galleryExclusionStatsOptions = {
-  all: false,
-  errorsCount: true,
-  outputPath: true,
-  children: true,
-  modules: true,
-  nestedModules: true,
-  orphanModules: true,
-  dependentModules: true,
-  runtimeModules: true,
-  chunks: true,
-  chunkModules: true,
-  assets: true,
-  assetsSpace: Infinity,
-  modulesSpace: Infinity,
-  nestedModulesSpace: Infinity,
-  chunkModulesSpace: Infinity,
-  groupModulesByPath: false,
-  groupModulesByType: false,
-  groupModulesByAttributes: false,
-  groupModulesByCacheStatus: false,
-  groupAssetsByPath: false,
-  groupAssetsByChunk: false,
-};
-
 const galleryPath = /(?:^|[! /\\])gallery[\\/]/;
 const galleryCode = /knx-gallery(?:-[a-z]+)?|gallery[\\/]src[\\/]/;
 
@@ -120,7 +95,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   try {
     if (process.argv.length !== 4) {
       throw new Error(
-        "Usage: node build-scripts/check-gallery-exclusion.mjs <stats-file> <unpacked-wheel-dir>",
+        "Usage: node gallery/script/check-gallery-exclusion.mjs <stats-file> <unpacked-wheel-dir>",
       );
     }
     check(process.argv[2], process.argv[3]);

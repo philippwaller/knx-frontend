@@ -33,7 +33,9 @@ jobs:
           persist-credentials: false
       - id: gate
         run: |
-          if [ -f build-scripts/gallery_pages.py ]; then
+          if [ -f gallery/script/gallery_pages.py ]; then
+            python3 gallery/script/gallery_pages.py gate
+          elif [ -f build-scripts/gallery_pages.py ]; then
             python3 build-scripts/gallery_pages.py gate
           else
             # Bootstrap: main has no trusted gate yet, so the PR introducing it builds like
@@ -49,8 +51,27 @@ jobs:
           GALLERY_PAGES_ENABLED: ${{ vars.GALLERY_PAGES_ENABLED }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
+  # Every PR validates its exact head, including forks without an approved preview.
+  checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Generate Gallery check inputs
+        run: SKIP_FETCH_NIGHTLY_TRANSLATIONS=1 pnpm exec gulp gen-icons-json build-translations build-locale-data
+      - run: pnpm gallery:policy
+      - run: pnpm gallery:lint
+      - run: pnpm gallery:types
+      - run: pnpm gallery:unit
+
   build:
-    needs: gate
+    needs: [gate, checks]
     if: needs.gate.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -94,7 +115,7 @@ jobs:
           path: ${{ runner.temp }}/babel-loader
           key: ${{ steps.babel-cache.outputs.cache-primary-key }}
       - name: Test production Pages paths
-        run: pnpm exec playwright test --config test/playwright.gallery-pages.config.ts
+        run: pnpm exec playwright test --config gallery/test/playwright.gallery-pages.config.ts
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: gallery-${{ github.run_id }}-${{ github.run_attempt }}
@@ -198,6 +219,6 @@ jobs:
           with TemporaryDirectory() as unpacked:
               with ZipFile(wheels[0]) as wheel:
                   wheel.extractall(unpacked)
-              subprocess.run(["node", "build-scripts/check-gallery-exclusion.mjs",
+              subprocess.run(["node", "gallery/script/check-gallery-exclusion.mjs",
                               "build/checks/production.json", unpacked], check=True)
           PYTHON
