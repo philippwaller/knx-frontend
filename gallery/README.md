@@ -1,6 +1,6 @@
 # KNX Frontend Gallery
 
-Optional offline previews of the actual product components, dialogs and views.
+Offline previews of the actual product components, dialogs and views.
 Local fixtures need no Home Assistant login or KNX connection; unknown backend
 calls fail visibly. Product code and builds must never import Gallery tooling.
 
