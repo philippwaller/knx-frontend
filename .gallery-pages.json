@@ -11,7 +11,7 @@
     "8": 6059290212,
     "9": 6059551633
   },
-  "deployment_pending": false,
+  "deployment_pending": true,
   "deployment_run": "37924256371/1",
   "main": {
     "actor_id": 1090452,
@@ -36,15 +36,20 @@
     },
     "15": {
       "actor_id": 1090452,
-      "artifact_id": 11612768957,
+      "artifact_id": 11613581844,
       "changes": {
-        "components": [],
+        "components": [
+          {
+            "id": "knx-dpt-option-selector",
+            "title": "Datapoint options"
+          }
+        ],
         "shared": false
       },
       "comment_id": null,
-      "run_attempt": 2,
-      "run_id": 37922773936,
-      "sha": "5f19c15e9718b302a354539432a9f4a2a4d57080"
+      "run_attempt": 1,
+      "run_id": 37924568812,
+      "sha": "58bf70563e0cfcd21d9a99a36897b6f5bc046652"
     },
     "7": {
       "actor_id": 1090452,
