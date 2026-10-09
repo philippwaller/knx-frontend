@@ -10,7 +10,7 @@
     "8": 6059290212,
     "9": 6059551633
   },
-  "deployment_pending": false,
+  "deployment_pending": true,
   "deployment_run": "37922449838/1",
   "main": {
     "actor_id": 1090452,
@@ -32,18 +32,6 @@
       "run_attempt": 1,
       "run_id": 37828487214,
       "sha": "1c826f24c86870478ef753551e0fbd6f86559dee"
-    },
-    "14": {
-      "actor_id": 1090452,
-      "artifact_id": 11611698792,
-      "changes": {
-        "components": [],
-        "shared": true
-      },
-      "comment_id": null,
-      "run_attempt": 1,
-      "run_id": 37921448991,
-      "sha": "848f2a420865aed1d65a3868604e8336e8c63383"
     },
     "7": {
       "actor_id": 1090452,
