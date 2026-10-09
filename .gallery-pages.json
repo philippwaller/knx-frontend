@@ -11,8 +11,8 @@
     "8": 6059290212,
     "9": 6059551633
   },
-  "deployment_pending": true,
-  "deployment_run": "37924124941/1",
+  "deployment_pending": false,
+  "deployment_run": "37924256371/1",
   "main": {
     "actor_id": 1090452,
     "artifact_id": 11613385479,
@@ -68,7 +68,7 @@
       "sha": "4765273d20217131ac41a4a25026b28ae6c4f2d3"
     }
   },
-  "published_commit": "4ce01ceea40c3027bcc56aa5bbf7d898cccb1a56",
+  "published_commit": "b6bd597ea513407f884cc9b7af6b3081a4b88b40",
   "repository": "philippwaller/knx-frontend",
   "requests": {},
   "schema": 1
