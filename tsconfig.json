@@ -5,6 +5,7 @@
   // default, which is why node_modules is listed.)
   "exclude": [
     "node_modules",
+    "gallery",
     ".claude",
     "homeassistant-frontend/gallery",
     "homeassistant-frontend/test"

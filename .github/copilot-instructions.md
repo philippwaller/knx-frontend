@@ -174,7 +174,8 @@ when reading these instructions through the root `AGENTS.md` symlink.
 Consider its affected gallery examples every time. Create an example for a new
 production custom element, and update affected examples as part of implementation
 when public interfaces, supported states or interaction behavior change. Use the
-skill's maintained references and existing verification entry points.
+skill's maintained references and the [Gallery README](../gallery/README.md) for
+authoring and separate Gallery verification commands.
 
 ## Testing
 

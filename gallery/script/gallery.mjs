@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs, promisify } from "node:util";
 import { rspack, HtmlRspackPlugin, CopyRspackPlugin } from "@rspack/core";
 import { RspackDevServer } from "@rspack/dev-server";
-import { createRspackConfig } from "./rspack.cjs";
+import { createRspackConfig } from "../../build-scripts/rspack.cjs";
 
 export function normalizeGalleryBasePath(value) {
   if (
@@ -43,7 +43,7 @@ export function createGalleryConfig({
   config.module.rules.push({
     include: resolve("homeassistant-frontend/src/util/brands-url.ts"),
     enforce: "pre",
-    use: resolve("build-scripts/gallery-brands-url-loader.cjs"),
+    use: resolve("gallery/script/gallery-brands-url-loader.cjs"),
   });
   config.plugins.push(
     ...["index", "preview"].map(
@@ -144,7 +144,7 @@ async function main() {
   });
   const [mode] = positionals;
   if (positionals.length !== 1 || !["develop", "build", "serve"].includes(mode)) {
-    throw new Error("Usage: node build-scripts/gallery.mjs <develop|build|serve> [--port 8091]");
+    throw new Error("Usage: node gallery/script/gallery.mjs <develop|build|serve> [--port 8091]");
   }
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {

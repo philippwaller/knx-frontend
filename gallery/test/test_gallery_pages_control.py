@@ -9,7 +9,7 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'build-scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'script'))
 import gallery_pages as pages
 from test_gallery_pages import SHA, pull
 

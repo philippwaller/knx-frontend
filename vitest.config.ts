@@ -25,7 +25,11 @@ export default defineConfig({
       TZ: "Etc/UTC",
       IS_TEST: "true",
     },
-    include: ["**/*.test.ts", "**/*.spec.ts"], // Include tests in any directory
+    include: [
+      "src/**/*.{test,spec}.ts",
+      "test/**/*.{test,spec}.ts",
+      "build-scripts/**/*.{test,spec}.ts",
+    ],
     exclude: [
       "homeassistant-frontend/**/*",
       "**/node_modules/**",

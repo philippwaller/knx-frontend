@@ -38,7 +38,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: prepare
-        run: python3 build-scripts/gallery_pages.py prepare
+        run: python3 gallery/script/gallery_pages.py prepare
         env:
           GH_TOKEN: ${{ github.token }}
           GALLERY_PAGES_ENABLED: ${{ vars.GALLERY_PAGES_ENABLED }}
@@ -68,7 +68,7 @@ jobs:
           ref: main
           persist-credentials: false
       - name: Recheck approval after any environment wait
-        run: python3 build-scripts/gallery_pages.py verify --state-commit "$STATE_COMMIT"
+        run: python3 gallery/script/gallery_pages.py verify --state-commit "$STATE_COMMIT"
         env:
           GH_TOKEN: ${{ github.token }}
           GALLERY_PAGES_ENABLED: ${{ vars.GALLERY_PAGES_ENABLED }}
@@ -95,7 +95,7 @@ jobs:
           persist-credentials: false
       - name: Confirm deployment and update preview links
         run: >-
-          python3 build-scripts/gallery_pages.py finish
+          python3 gallery/script/gallery_pages.py finish
           --result "$DEPLOY_RESULT" --state-commit "$STATE_COMMIT"
           --deployment-run "$DEPLOY_RUN"
         env:

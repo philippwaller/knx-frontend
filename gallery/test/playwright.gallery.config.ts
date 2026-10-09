@@ -16,10 +16,10 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    cwd: resolve(import.meta.dirname, ".."),
+    cwd: resolve(import.meta.dirname, "../.."),
     env: { NO_UPDATE_CHECK: "1" },
     command: production
-      ? "node build-scripts/gallery.mjs serve --port 8092"
+      ? "node gallery/script/gallery.mjs serve --port 8092"
       : "pnpm gallery --port 8092",
     url: production ? `${baseURL}preview.html` : baseURL,
     reuseExistingServer: false,

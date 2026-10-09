@@ -1,5 +1,5 @@
 import { expect, test as base, type FrameLocator, type Locator, type Page } from "@playwright/test";
-import { catalog, catalogGroups } from "../gallery/src/catalog";
+import { catalog, catalogGroups } from "../src/catalog";
 
 // Every browser test fails on real console/page errors or accidental backend traffic.
 const test = base.extend<{ checkedPage: undefined }>({

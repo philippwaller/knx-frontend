@@ -10,7 +10,7 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "build-scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "script"))
 import gallery_pages as pages
 
 
@@ -95,6 +95,24 @@ class MainGateTests(unittest.TestCase):
         with self.assertRaises(pages.subprocess.CalledProcessError):
             pages.git("cat-file", "-e", self.base + "^{commit}")
         self.assertEqual(self.gate(sha), "build=false\n")
+
+    def test_gallery_authoring_docs_after_confirmed_baseline_skip(self):
+        for path in ["gallery/README.md", ".agents/skills/knx-frontend-gallery/SKILL.md",
+                     ".github/copilot-instructions.md"]:
+            with self.subTest(path=path):
+                self.confirmed["main"] = self.entry(pages.git("rev-parse", "HEAD"))
+                self.write(path, "authoring documentation only")
+                self.assertEqual(self.gate(self.commit()), "build=false\n")
+
+    def test_relocated_gallery_inputs_build(self):
+        for path in ["gallery/src/catalog.ts", "gallery/script/gallery.mjs",
+                     "gallery/script/gallery_pages.py", "gallery/test/gallery-workflows.test.ts",
+                     "gallery/test/playwright.gallery.config.ts", "gallery/vitest.config.ts",
+                     "gallery/tsconfig.json"]:
+            with self.subTest(path=path):
+                self.confirmed["main"] = self.entry(pages.git("rev-parse", "HEAD"))
+                self.write(path, "changed Gallery input")
+                self.assert_build(self.commit())
 
     def test_source_change_builds(self):
         self.write("src/component.ts", "changed source")
@@ -195,6 +213,14 @@ class BrowserInputPolicyTests(unittest.TestCase):
                      "test/playwright.gallery-thumbnails.config.ts", "test/playwright.gallery-extra.config.ts"]:
             with self.subTest(path=path):
                 self.assertTrue(pages.has_gallery_changes([path]))
+
+    def test_docs_do_not_hide_runtime_changes(self):
+        docs = ["gallery/README.md", ".agents/skills/knx-frontend-gallery/SKILL.md"]
+        self.assertFalse(pages.has_gallery_changes(docs))
+        for path in ["src/styles.ts", "gallery/src/examples/README.md", "gallery/script/README.md",
+                     "gallery/test/test_gallery_pages_gate.py", "pnpm-lock.yaml", "homeassistant-frontend"]:
+            with self.subTest(path=path):
+                self.assertTrue(pages.has_gallery_changes([*docs, path]))
 
     def test_other_browser_tests_remain_irrelevant(self):
         self.assertFalse(pages.has_gallery_changes([

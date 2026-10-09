@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { rspack, type Stats } from "@rspack/core";
 import { afterEach, expect, it } from "vitest";
-import { findGalleryModules, galleryExclusionStatsOptions } from "./check-gallery-exclusion.mjs";
+import { productionStatsOptions } from "../../build-scripts/rspack.cjs";
+import { findGalleryModules } from "../script/check-gallery-exclusion.mjs";
 
 const gallery = "./gallery/src/preview.ts";
 const clean = { modules: [{ identifier: "./src/main.ts" }] };
@@ -51,7 +52,7 @@ it("requires valid build evidence and rejects named or renamed wheel contaminati
   const run = () =>
     spawnSync(
       process.execPath,
-      [resolve("build-scripts/check-gallery-exclusion.mjs"), statsPath, wheel],
+      [resolve("gallery/script/check-gallery-exclusion.mjs"), statsPath, wheel],
       { encoding: "utf8" },
     );
   expect(run().status).toBe(0);
@@ -125,7 +126,7 @@ it("includes gallery identities from a real production concatenated module", asy
         else accept(result);
       });
     });
-    const json = stats.toJson(galleryExclusionStatsOptions);
+    const json = stats.toJson(productionStatsOptions);
     const concatenated = json.modules?.find((module) => module.name?.includes("+ 1 modules"));
     expect(concatenated).toBeDefined();
     expect(

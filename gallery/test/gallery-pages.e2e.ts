@@ -1,6 +1,6 @@
 /* eslint-disable no-await-in-loop -- Verify sequential navigation in one browser session. */
 import { expect, test } from "@playwright/test";
-import { catalog } from "../gallery/src/catalog";
+import { catalog } from "../src/catalog";
 
 test("production gallery keeps assets and interactive previews within its Pages prefix", async ({
   page,

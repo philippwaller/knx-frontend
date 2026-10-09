@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { catalog } from "../gallery/src/catalog";
-import type { GalleryConfigureMessage } from "../gallery/src/types";
+import { catalog } from "../src/catalog";
+import type { GalleryConfigureMessage } from "../src/types";
 
 test("publish catalog metadata for PR preview links", async () => {
   const output = resolve("build/gallery");

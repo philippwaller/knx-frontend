@@ -8,8 +8,8 @@ export default defineConfig({
   outputDir: "coverage/gallery-pages",
   use: { baseURL, viewport: { width: 1600, height: 1000 }, trace: "retain-on-failure" },
   webServer: {
-    cwd: resolve(import.meta.dirname, ".."),
-    command: "node build-scripts/gallery.mjs serve --port 8094",
+    cwd: resolve(import.meta.dirname, "../.."),
+    command: "node gallery/script/gallery.mjs serve --port 8094",
     url: `${baseURL}preview.html`,
     reuseExistingServer: false,
   },
