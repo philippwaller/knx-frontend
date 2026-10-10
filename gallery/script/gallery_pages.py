@@ -430,7 +430,8 @@ def status_body(pr: dict, published: dict | None, url: str, phase: str = "", *,
             body += f"[Open Gallery workflow →](https://github.com/{repository()}/actions/workflows/gallery-build.yml)\n\n"
     if published:
         stale = published["sha"] != pr["head"]["sha"]
-        preview_url = f"{url.rstrip('/')}/pr/{pr['number']}/"
+        suffix = "gallery/" if published.get("layout") == "gallery" else ""
+        preview_url = f"{url.rstrip('/')}/pr/{pr['number']}/{suffix}"
         if stale:
             body += f"**[Open previous preview →]({preview_url})** · This preview is out of date and shows an earlier commit.\n\n"
         else:
@@ -446,11 +447,11 @@ def status_body(pr: dict, published: dict | None, url: str, phase: str = "", *,
                 # Treat catalog titles as untrusted text, including Markdown and mentions.
                 title = re.sub(r"([\\`*_{}\[\]()<>#!|~])", r"\\\1", entry["title"]).replace("@", "@\u200b")
                 query = urllib.parse.urlencode({"component": entry["id"], "scenario": "default"})
-                link = f"- [{title}]({url.rstrip('/')}/pr/{pr['number']}/?{query})\n"
+                link = f"- [{title}]({preview_url}?{query})\n"
                 # ponytail: cap link text at 20,000 characters; large PRs use the overview.
                 if link_length + len(link) > 20_000:
                     remaining = len(changes["components"]) - index
-                    body += f"\n{remaining} more components. [Browse all examples]({url.rstrip('/')}/pr/{pr['number']}/).\n"
+                    body += f"\n{remaining} more components. [Browse all examples]({preview_url}).\n"
                     break
                 body += link
                 link_length += len(link)
@@ -532,7 +533,8 @@ def main_is_newer(candidate: dict, published: dict | None) -> bool:
 
 
 def entry_for(run: dict) -> dict:
-    return {key: run[key] for key in ["sha", "run_id", "run_attempt", "artifact_id", "comment_id", "actor_id"]}
+    return dict({key: run[key] for key in ["sha", "run_id", "run_attempt", "artifact_id", "comment_id", "actor_id"]},
+                layout="gallery")
 
 
 def prepare(event: dict):
@@ -583,13 +585,13 @@ def prepare(event: dict):
     candidates = []
     for number, entry in [(None, state["main"]), *state["previews"].items()]:
         previous = confirmed["main"] if number is None else confirmed["previews"].get(number)
-        if entry is None or entry == previous:
-            continue
+        if entry is None or entry == previous or entry.get("layout") != "gallery":
+            continue  # Legacy pending bundles cannot be relocated: rebuild them.
         recovered = resolve_build_run({"workflow_run": {"id": entry["run_id"], "run_attempt": entry["run_attempt"]}})
         if recovered and recovered["conclusion"] == "success" and recovered["sha"] == entry["sha"]:
             recovered["artifact_id"] = entry["artifact_id"]
             recovered["changes"] = entry.get("changes")
-            candidates.append((recovered, store.root if number is None else store.root / "pr" / number))
+            candidates.append((recovered, store.root / site.gallery_path(int(number) if number else None)))
     if incoming:
         artifact = run_artifact(incoming)
         if artifact:
@@ -598,6 +600,8 @@ def prepare(event: dict):
             download_artifact(artifact, archive)
             candidate = archive.with_suffix("")
             site.extract_gallery(archive, candidate)
+            target = site.gallery_path(incoming["pr_number"]).as_posix()
+            site.validate_gallery_base(candidate, pages_base() + target + "/")
             candidates.append((incoming, candidate))
 
     # A successful Pages upload may have outlived a failed confirmation push.
@@ -619,17 +623,16 @@ def prepare(event: dict):
         if fresh is None or fresh["sha"] != run["sha"]:
             continue
         number = run["pr_number"]
+        previous = state["main"] if number is None else state["previews"].get(str(number))
+        migrating = previous and previous["sha"] == run["sha"] and previous.get("layout") != "gallery"
         if number is None:
-            if not main_is_newer(run, state["main"]):
+            if not migrating and not main_is_newer(run, previous):
                 continue
-        elif state["previews"].get(str(number), {}).get("sha") == run["sha"]:
+        elif previous and previous["sha"] == run["sha"] and not migrating:
             continue
-        # A saved main candidate shares its directory with other PRs and state.
-        clean_candidate = Path(tempfile.mkdtemp(dir=os.environ["RUNNER_TEMP"]))
-        shutil.copytree(candidate, clean_candidate, dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns(".git", site.STATE, "pr"))
         next_root = Path(tempfile.mkdtemp(dir=os.environ["RUNNER_TEMP"])) / "site"
-        site.compose_site(output_root, next_root, clean_candidate, number, set())
+        site.compose_site(output_root, next_root, candidate, number, set(),
+                          legacy_main=number is None and previous is not None and previous.get("layout") != "gallery")
         shutil.rmtree(output_root)
         shutil.move(str(next_root), output_root)
         if number is None:
@@ -638,7 +641,7 @@ def prepare(event: dict):
             entry = entry_for(run)
             changes = run.get("changes")
             if changes is None:
-                changes = preview_changes(run, clean_candidate)
+                changes = preview_changes(run, candidate)
             if changes is not None:
                 entry["changes"] = changes
             state["previews"][str(number)] = entry
@@ -725,9 +728,10 @@ def gate(event: dict):
             except (OSError, http.client.HTTPException, ValueError, KeyError, TypeError):
                 previous = None
             old_sha = previous.get("sha") if isinstance(previous, dict) else None
-            if isinstance(old_sha, str) and not relevant_main(sha, old_sha):
+            if (isinstance(old_sha, str) and previous.get("layout") == "gallery"
+                    and not relevant_main(sha, old_sha)):
                 return
-        output(build=True, sha=sha, pr_number="", base_path=base)
+        output(build=True, sha=sha, pr_number="", base_path=base + "gallery/" if enabled else "/")
         return
     original = event["pull_request"]
     pr = github_request("GET", repo_path(f"/pulls/{int(original['number'])}"))
@@ -738,11 +742,12 @@ def gate(event: dict):
     if run is None or run["target"] != "pr" or run["pr_number"] != pr["number"] or run["sha"] != original["head"]["sha"]:
         return
     previous = published_remote_state()["previews"].get(str(pr["number"])) if enabled else None
-    if previous and previous["sha"] == run["sha"]:
+    if previous and previous["sha"] == run["sha"] and previous.get("layout") == "gallery":
         return
-    if run["authorization_kind"] != "rerun" and not relevant(pr, previous["sha"] if previous else None):
+    if (run["authorization_kind"] != "rerun" and not (previous and previous.get("layout") != "gallery")
+            and not relevant(pr, previous["sha"] if previous else None)):
         return
-    output(build=True, sha=run["sha"], pr_number=pr["number"], base_path=f"{base}pr/{pr['number']}/" if enabled else "/")
+    output(build=True, sha=run["sha"], pr_number=pr["number"], base_path=f"{base}pr/{pr['number']}/gallery/" if enabled else "/")
 
 
 def main():

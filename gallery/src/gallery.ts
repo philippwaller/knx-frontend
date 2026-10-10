@@ -78,6 +78,7 @@ interface PreviewDevice {
 }
 interface PreviewPane {
   frame?: HTMLIFrameElement;
+  bootstrapTimer?: number;
   ready: boolean;
   status: string;
   error: string;
@@ -232,6 +233,7 @@ export class KnxComponentGallery extends LitElement {
   }
   public disconnectedCallback() {
     super.disconnectedCallback();
+    for (const pane of this._panes.values()) this._stopBootstrapTimer(pane);
     if (Object.getOwnPropertyDescriptor(window, "customPanel")?.get === this._customPanel) {
       if (this._previousCustomPanel) {
         Object.defineProperty(window, "customPanel", this._previousCustomPanel);
@@ -398,6 +400,7 @@ export class KnxComponentGallery extends LitElement {
     this._stopAlignment(false);
     this._previewState = undefined;
     this._code = "";
+    for (const pane of this._panes.values()) this._stopBootstrapTimer(pane);
     this._panes.clear();
     this._sessionId = crypto.randomUUID();
     this._writer = undefined;
@@ -428,16 +431,47 @@ export class KnxComponentGallery extends LitElement {
     const frames = new Set(this._iframes);
     for (const [key, pane] of this._panes) {
       if (pane.frame && !frames.has(pane.frame)) {
+        this._stopBootstrapTimer(pane);
         this._revisions.delete(pane.frame);
         if (this._writer === pane.frame) this._writer = undefined;
         this._panes.delete(key);
       }
     }
     for (const frame of frames) {
-      this._pane(frame.dataset.previewKey!).frame = frame;
+      const key = frame.dataset.previewKey!;
+      const pane = this._pane(key);
+      if (pane.frame === frame) continue;
+      pane.frame = frame;
+      if (pane.ready) continue;
+      const session = this._sessionId;
+      pane.bootstrapTimer = window.setTimeout(() => {
+        delete pane.bootstrapTimer;
+        if (
+          !this.isConnected ||
+          this._sessionId !== session ||
+          this._panes.get(key) !== pane ||
+          pane.frame !== frame ||
+          pane.ready
+        ) {
+          return;
+        }
+        pane.error = en.failed;
+        pane.status = en.ui.failed;
+        this._events = appendEvent(this._events, {
+          kind: "error",
+          name: frame.title,
+          timestamp: Date.now(),
+          args: pane.error,
+        });
+        this.requestUpdate();
+      }, 30_000);
     }
     this._code = this._panes.get(this._paneKey(this._selectedDevices[0].id, false))?.code ?? "";
     if (!this._writer) this._assignWriter();
+  }
+  private _stopBootstrapTimer(pane: PreviewPane) {
+    window.clearTimeout(pane.bootstrapTimer);
+    delete pane.bootstrapTimer;
   }
   private _assignWriter() {
     if (!this._writer) {
@@ -566,9 +600,12 @@ export class KnxComponentGallery extends LitElement {
     } else if (message.type === "resize") {
       pane.height = message.height ?? undefined;
     } else if (message.type === "ready") {
+      this._stopBootstrapTimer(pane);
       pane.ready = true;
+      pane.error = "";
       this._configure(frame);
     } else if (message.type === "rendered" || message.type === "error") {
+      this._stopBootstrapTimer(pane);
       pane.error = message.type === "error" ? message.error || en.failed : "";
       pane.status = pane.error ? en.ui.failed : en.ui.ready;
       this._applyBounds();

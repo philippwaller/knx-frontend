@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+import zipfile
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'script'))
@@ -40,12 +41,12 @@ class ControlFlowTests(unittest.TestCase):
         self.old = self.store.save('Initial state')
         self.store.state['published_commit'] = self.old
         self.store.save('Confirm initial state')
-        self.entry = dict(sha=SHA, run_id=10, run_attempt=1, artifact_id=20, comment_id=7, actor_id=2)
+        self.entry = dict(sha=SHA, run_id=10, run_attempt=1, artifact_id=20, comment_id=7, actor_id=2, layout="gallery")
         self.store.state['previews']['12'] = self.entry.copy()
-        preview = self.store.root / 'pr/12'
+        preview = self.store.root / 'pr/12/gallery'
         preview.mkdir(parents=True)
-        (preview / 'index.html').write_text('candidate')
-        (preview / 'preview.html').write_text('interactive')
+        (preview / 'index.html').write_text('<script src="/demo/pr/12/gallery/gallery.a1.js" type="module"></script>')
+        (preview / 'preview.html').write_text('<script src="/demo/pr/12/gallery/preview.a1.js" type="module"></script>')
         self.candidate = self.store.save('Prepare candidate')
         factory = patch.object(pages, 'Store', return_value=self.store)
         factory.start(); self.addCleanup(factory.stop)
@@ -55,7 +56,7 @@ class ControlFlowTests(unittest.TestCase):
             pages.finish('failure', self.candidate, '')
         self.assertEqual(self.store.state['published_commit'], self.old)
         self.assertEqual(self.store.published()[1]['previews'], {})
-        self.assertTrue((self.store.root / 'pr/12/index.html').exists())
+        self.assertTrue((self.store.root / 'pr/12/gallery/index.html').exists())
 
     def test_failed_comment_update_preserves_deploy_success_and_can_retry(self):
         with patch.object(pages, 'github_request', return_value=pull()), patch.object(pages, 'update_status', side_effect=TimeoutError):
@@ -155,13 +156,101 @@ class ControlFlowTests(unittest.TestCase):
                 self.assertEqual(self.store.state["previews"]["12"]["sha"], SHA)
                 self.assertNotIn("deploy=true", (self.root / "outputs").read_text())
 
+    def test_legacy_pending_candidate_is_discarded_without_relocating_bundle(self):
+        self.store.state["previews"]["12"].pop("layout")
+        pages.shutil.move(str(self.store.root / "pr/12/gallery/index.html"), self.store.root / "pr/12/index.html")
+        pages.shutil.move(str(self.store.root / "pr/12/gallery/preview.html"), self.store.root / "pr/12/preview.html")
+        pages.shutil.rmtree(self.store.root / "pr/12/gallery")
+        self.store.save("Old layout pending candidate")
+        run = dict(self.entry, target="pr", pr_number=12, conclusion="success", status="completed")
+        with patch.object(pages, "resolve_build_run", return_value=run), patch.object(pages, "github_request", return_value=pull()):
+            pages.prepare({})
+        self.assertIn("deploy=true", (self.root / "outputs").read_text())
+        self.assertFalse((self.root / "gallery-pages-public/pr/12").exists())
+        self.assertEqual(self.store.state["previews"], {})
+
+    def test_main_pending_recovery_reads_gallery_directory_without_nesting_it(self):
+        self.store.state["previews"] = {}
+        self.store.state["main"] = self.entry.copy()
+        gallery = self.store.root / "gallery"; gallery.mkdir()
+        (gallery / "index.html").write_text("main candidate")
+        (gallery / "preview.html").write_text("main preview")
+        (self.store.root / "unrelated.txt").write_text("private root")
+        self.store.save("Save namespaced main candidate")
+        run = dict(self.entry, target="main", pr_number=None, conclusion="success", status="completed")
+        with patch.object(pages, "resolve_build_run", return_value=run):
+            pages.prepare({})
+        public = self.root / "gallery-pages-public"
+        self.assertEqual((public / "gallery/index.html").read_text(), "main candidate")
+        self.assertFalse((public / "gallery/gallery").exists())
+        self.assertFalse((public / "gallery/unrelated.txt").exists())
+        self.assertEqual(self.store.state["main"]["layout"], "gallery")
+
+    def test_legacy_same_head_main_can_be_replaced_by_new_layout_artifact(self):
+        self.store.state["previews"] = {}
+        self.store.state["main"] = {k: v for k, v in self.entry.items() if k != "layout"}
+        (self.store.root / "index.html").write_text("legacy main")
+        (self.store.root / "preview.html").write_text("legacy main preview")
+        legacy = self.store.save("Prepare legacy main")
+        self.store.state["published_commit"] = legacy
+        self.store.save("Confirm legacy main")
+        run = dict(self.entry, target="main", pr_number=None, conclusion="success", status="completed")
+        def download(artifact, archive):
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("index.html", '<script src="/demo/gallery/gallery.a1.js"></script>')
+                bundle.writestr("preview.html", '<script src="/demo/gallery/preview.a1.js"></script>')
+                bundle.writestr("gallery.a1.js", "module")
+                bundle.writestr("preview.a1.js", "module")
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_run"}), patch.object(pages, "resolve_build_run", return_value=run), patch.object(pages, "run_artifact", return_value={"id": 20}), patch.object(pages, "download_artifact", side_effect=download), patch.object(pages, "pages_base", return_value="/demo/"), patch.object(pages, "main_is_newer", side_effect=AssertionError("Same-head migration must not compare history")):
+            pages.prepare({"workflow_run": {"id": 10, "run_attempt": 1}})
+        self.assertEqual(self.store.state["main"]["layout"], "gallery")
+        self.assertTrue((self.root / "gallery-pages-public/gallery/index.html").exists())
+        self.assertFalse((self.root / "gallery-pages-public/index.html").exists())
+
+    def test_old_incoming_bundle_is_rejected_and_confirmed_legacy_link_survives(self):
+        legacy = {k: v for k, v in self.entry.items() if k != "layout"}
+        legacy["sha"] = "b" * 40
+        self.store.state["previews"]["12"] = legacy
+        pages.shutil.rmtree(self.store.root / "pr/12/gallery")
+        (self.store.root / "pr/12/index.html").write_text("legacy preview")
+        (self.store.root / "pr/12/preview.html").write_text("legacy frame")
+        confirmed = self.store.save("Prepare legacy preview")
+        self.store.state["published_commit"] = confirmed
+        self.store.save("Confirm legacy preview")
+        before = pages.git("rev-parse", "HEAD", cwd=self.store.root)
+        run = dict(self.entry, target="pr", pr_number=12, conclusion="success", status="completed")
+        def download(artifact, archive):
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("index.html", '<script src="/demo/pr/12/gallery.a1.js"></script>')
+                bundle.writestr("preview.html", '<script src="/demo/pr/12/preview.a1.js"></script>')
+                bundle.writestr("gallery.a1.js", "module")
+                bundle.writestr("preview.a1.js", "module")
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_run"}), patch.object(pages, "resolve_build_run", return_value=run), patch.object(pages, "github_request", return_value=pull()), patch.object(pages, "run_artifact", return_value={"id": 20}), patch.object(pages, "download_artifact", side_effect=download), patch.object(pages, "pages_base", return_value="/demo/"):
+            with self.assertRaisesRegex(ValueError, "base path"):
+                pages.prepare({"workflow_run": {"id": 10, "run_attempt": 1}})
+        self.assertEqual(pages.git("rev-parse", "HEAD", cwd=self.store.root), before)
+        self.assertEqual(self.store.state["published_commit"], confirmed)
+        self.assertEqual((self.store.root / "pr/12/index.html").read_text(), "legacy preview")
+        body = pages.status_body(pull(), legacy, "https://example.test/demo/", "Build failed")
+        self.assertIn("[Open previous preview →](https://example.test/demo/pr/12/)", body)
+        self.assertNotIn("pr/12/gallery/", body)
+        self.assertNotIn("deploy=true", (self.root / "outputs").read_text())
+
+    def test_late_close_removes_namespaced_candidate_before_deployment(self):
+        run = dict(self.entry, target="pr", pr_number=12, conclusion="success", status="completed")
+        with patch.object(pages, "resolve_build_run", return_value=run), patch.object(pages, "reconcile_previews", side_effect=[set(), {12}]):
+            pages.prepare({})
+        self.assertEqual(self.store.state["previews"], {})
+        self.assertFalse((self.root / "gallery-pages-public/pr/12").exists())
+        self.assertIn("deploy=true", (self.root / "outputs").read_text())
+
     def test_unconfirmed_success_is_safe_to_retry(self):
         run = dict(self.entry, target='pr', pr_number=12, conclusion='success', status='completed')
         with patch.object(pages, 'resolve_build_run', return_value=run), patch.object(pages, 'github_request', return_value=pull()):
             pages.prepare({})
         self.assertIn('deploy=true', (self.root / 'outputs').read_text())
         self.assertEqual(self.store.state['published_commit'], self.old)
-        self.assertEqual((self.root / 'gallery-pages-public/pr/12/index.html').read_text(), 'candidate')
+        self.assertEqual((self.root / 'gallery-pages-public/pr/12/gallery/index.html').read_text(), '<script src="/demo/pr/12/gallery/gallery.a1.js" type="module"></script>')
 
     def test_component_links_are_confirmed_with_their_deployment_snapshot(self):
         changes = {"components": [{"id": "address-input", "title": "Address input"}], "shared": True}

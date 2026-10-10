@@ -1,8 +1,9 @@
 /* eslint-disable no-await-in-loop -- Verify sequential navigation in one browser session. */
 import { expect, test } from "@playwright/test";
 import { catalog } from "../src/catalog";
+import { mockGalleryBrand } from "./brands";
 
-test("production gallery keeps assets and interactive previews within its Pages prefix", async ({
+test("production gallery keeps local assets and interactive previews within its Pages prefix", async ({
   page,
   baseURL,
 }) => {
@@ -13,6 +14,7 @@ test("production gallery keeps assets and interactive previews within its Pages 
     if (response.status() >= 400) failures.push(`${response.status()} ${response.url()}`);
   });
   await page.route("**/*", async (route) => {
+    if (await mockGalleryBrand(route)) return;
     const url = new URL(route.request().url());
     if (
       url.origin !== base.origin ||

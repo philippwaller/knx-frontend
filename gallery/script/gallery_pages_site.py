@@ -1,4 +1,5 @@
 """Bounded, non-executable artifact handling for the trusted Pages publisher."""
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
@@ -102,6 +103,36 @@ def extract_gallery(archive: Path, destination: Path) -> None:
             raise
 
 
+def validate_gallery_base(root: Path, base: str) -> None:
+    """Reject bundles compiled for a different placement; never rewrite PR code."""
+    class Scripts(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.sources = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "script":
+                source = dict(attrs).get("src")
+                if source is not None:
+                    self.sources.append(source)
+
+    for name in ["index.html", "preview.html"]:
+        parser = Scripts()
+        parser.feed((root / name).read_text())
+        if not parser.sources or any(not source.startswith(base)
+                or not re.fullmatch(r"[A-Za-z0-9_.-]+\.js", source[len(base):])
+                or not (root / source[len(base):]).is_file() for source in parser.sources):
+            raise ValueError("Gallery artifact was built for a different base path")
+
+
+def gallery_path(pr_number: int | None) -> Path:
+    if pr_number is None:
+        return Path("gallery")
+    if type(pr_number) is not int or pr_number <= 0:
+        raise ValueError("Invalid PR number")
+    return Path("pr") / str(pr_number) / "gallery"
+
+
 def validate_site_size(root: Path) -> int:
     size = 0
     for path in root.rglob("*"):
@@ -115,7 +146,7 @@ def validate_site_size(root: Path) -> int:
 
 
 def compose_site(published: Path, output: Path, candidate: Path | None,
-                 pr_number: int | None, remove_prs: set[int]) -> None:
+                 pr_number: int | None, remove_prs: set[int], *, legacy_main=False) -> None:
     if output.exists():
         raise ValueError("Site output must not exist")
     if published.exists():
@@ -127,18 +158,19 @@ def compose_site(published: Path, output: Path, candidate: Path | None,
             raise ValueError("Invalid PR number")
         shutil.rmtree(output / "pr" / str(number), ignore_errors=True)
     if candidate is not None:
+        target = output / gallery_path(pr_number)
         if pr_number is None:
-            for path in output.iterdir():
-                if path.name == "pr":
-                    continue
-                shutil.rmtree(path) if path.is_dir() else path.unlink()
-            shutil.copytree(candidate, output, dirs_exist_ok=True)
-        else:
-            if not isinstance(pr_number, int) or pr_number <= 0:
-                raise ValueError("Invalid PR number")
-            target = output / "pr" / str(pr_number)
+            if legacy_main:
+                # The former publisher owned the entire root apart from PR slots.
+                for path in output.iterdir():
+                    if path.name in {"pr", "gallery"}:
+                        continue
+                    shutil.rmtree(path) if path.is_dir() else path.unlink()
             shutil.rmtree(target, ignore_errors=True)
-            shutil.copytree(candidate, target)
+        else:
+            # Replace the owned PR slot, including any legacy root-level bundle.
+            shutil.rmtree(target.parent, ignore_errors=True)
+        shutil.copytree(candidate, target)
     validate_site_size(output)
 
 
@@ -162,6 +194,8 @@ def read_state(root: Path, repository: str) -> dict:
     for entry in [data["main"], *data["previews"].values()]:
         if entry is None:
             continue
+        if "layout" in entry and entry["layout"] != "gallery":
+            raise ValueError("Invalid gallery layout")
         if not re.fullmatch("[a-f0-9]{40}", entry["sha"]):
             raise ValueError("Invalid gallery commit")
         for field in ["run_id", "run_attempt", "artifact_id", "actor_id"]:

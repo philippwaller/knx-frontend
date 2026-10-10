@@ -65,6 +65,99 @@ it.each([
   },
 );
 
+it("uses version-matched browser containers with isolated dependency caches", () => {
+  const build = workflow("gallery-build");
+  const version = JSON.parse(readFileSync("package.json", "utf8")).devDependencies[
+    "@playwright/test"
+  ];
+  for (const role of ["build", "browser-tests"]) {
+    const job = build.jobs[role];
+    expect(job.container).toEqual({
+      image: `mcr.microsoft.com/playwright:v${version}-noble`,
+      options: "--user 1001 --ipc=host",
+    });
+    expect(JSON.stringify(job)).not.toContain("playwright install");
+    expect(
+      job.steps.find(({ uses }: { uses?: string }) => uses === "./.github/actions/setup").with,
+    ).toEqual({ "dependency-cache-prefix": `knx-frontend-deps-playwright-v${version}-noble` });
+  }
+  for (const role of ["checks", "release-check", "merge-reports"]) {
+    expect(build.jobs[role]?.container).toBeUndefined();
+  }
+  const setup: any = load(readFileSync(".github/actions/setup/action.yml", "utf8"));
+  expect(setup.inputs["dependency-cache-prefix"].default).toBe("knx-frontend-deps");
+  const cache = setup.runs.steps.find(({ uses }: { uses?: string }) =>
+    uses?.startsWith("actions/cache@"),
+  );
+  expect(cache.with.key).toBe(
+    "${{ inputs.dependency-cache-prefix }}-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml') }}",
+  );
+  expect(cache.with["restore-keys"]).toBe(
+    "${{ inputs.dependency-cache-prefix }}-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-\n" +
+      "${{ inputs.dependency-cache-prefix }}-${{ runner.os }}-\n",
+  );
+});
+
+it("retains shard failure diagnostics and merges only current-attempt blobs with read-only permissions", () => {
+  const build = workflow("gallery-build");
+  const shards = build.jobs["browser-tests"];
+  expect(shards.strategy).toEqual({ "fail-fast": false, matrix: { shard: [1, 2] } });
+  expect(shards["continue-on-error"]).toBeUndefined();
+  const test = shards.steps.find(
+    ({ name }: { name?: string }) => name === "Test interactive gallery",
+  );
+  expect(test["continue-on-error"]).toBeUndefined();
+  const uploads = shards.steps.filter(({ uses }: { uses?: string }) =>
+    uses?.startsWith("actions/upload-artifact@"),
+  );
+  expect(uploads).toHaveLength(2);
+  for (const [index, kind] of ["report", "results"].entries()) {
+    expect(uploads[index].if).toBe("${{ !cancelled() }}");
+    expect(uploads[index].with).toEqual({
+      name: `gallery-test-${kind}-\${{ github.run_attempt }}-\${{ matrix.shard }}`,
+      path: kind === "report" ? "blob-report/gallery/" : "test-results/gallery/",
+      "retention-days": 14,
+      "if-no-files-found": "ignore",
+    });
+  }
+  const merge = build.jobs["merge-reports"];
+  expect(merge.needs).toEqual(["gate", "browser-tests"]);
+  expect(merge.if).toBe("${{ !cancelled() && needs.browser-tests.result != 'skipped' }}");
+  expect(merge["runs-on"]).toBe("ubuntu-latest");
+  expect(merge.permissions).toEqual({ contents: "read" });
+  expect(merge.steps[0].with).toEqual({
+    ref: "${{ needs.gate.outputs.sha }}",
+    submodules: "recursive",
+    "persist-credentials": false,
+  });
+  expect(merge.env).toEqual({ PLAYWRIGHT_HTML_OPEN: "never" });
+  const download = merge.steps.find(({ uses }: { uses?: string }) =>
+    uses?.startsWith("actions/download-artifact@"),
+  );
+  expect(download.with).toEqual({
+    pattern: "gallery-test-report-${{ github.run_attempt }}-*",
+    path: "all-blob-reports/",
+    "merge-multiple": true,
+  });
+  expect(
+    merge.steps.some(
+      ({ run }: { run?: string }) =>
+        run === "pnpm exec playwright merge-reports --reporter html all-blob-reports",
+    ),
+  ).toBe(true);
+  const html = merge.steps.find(({ uses }: { uses?: string }) =>
+    uses?.startsWith("actions/upload-artifact@"),
+  );
+  expect(html.if).toBe("${{ !cancelled() }}");
+  expect(html.with).toEqual({
+    name: "gallery-test-report-html-${{ github.run_attempt }}",
+    path: "playwright-report/",
+    "retention-days": 14,
+    "if-no-files-found": "error",
+  });
+  expect(JSON.stringify(merge)).not.toMatch(/secrets\.|continue-on-error|gallery_pages/);
+});
+
 it("pins every external Gallery validation Action to a commit", () => {
   for (const job of Object.values(workflow("gallery-build").jobs) as any[]) {
     for (const step of job.steps) {
@@ -202,9 +295,26 @@ it.each([
   }
 });
 
-it("keeps product CI free of Gallery-only checks while retaining wheel and size checks", () => {
+it("runs shared CI checks while retaining focused publication checks and product coverage", () => {
   const ci = workflow("ci");
-  expect(JSON.stringify(ci)).not.toMatch(/gallery|build-locale-data|KNX_BUILD_STATS/);
+  expect(JSON.stringify(ci)).not.toMatch(/gallery:(?:unit|lint"|types)|KNX_BUILD_STATS/);
+  const lintRuns = ci.jobs.lint.steps.map(({ run }: { run?: string }) => run).filter(Boolean);
+  expect(lintRuns).toEqual([
+    "pnpm run lint:eslint",
+    "pnpm run lint:prettier",
+    "pnpm exec gulp gen-icons-json build-translations build-locale-data",
+    "pnpm run lint:lit",
+    "pnpm run gallery:lint:tools",
+    "pnpm dedupe --check",
+  ]);
+  expect(
+    ci.jobs.test.steps.some(
+      ({ run }: { run?: string }) => run === "pnpm test --exclude '**/.worktrees/**'",
+    ),
+  ).toBe(true);
+  expect(
+    ci.jobs.types.steps.some(({ run }: { run?: string }) => run === "pnpm run lint:types"),
+  ).toBe(true);
   expect(ci.jobs.build.steps.some(({ run }: { run?: string }) => run === "pnpm build")).toBe(true);
   expect(ci.jobs.build.steps.some(({ name }: { name?: string }) => name === "Build wheel")).toBe(
     true,
@@ -212,11 +322,37 @@ it("keeps product CI free of Gallery-only checks while retaining wheel and size 
   expect(ci.jobs.size.needs).toBe("build");
   expect(
     ci.jobs.types.steps.some(
-      ({ run }: { run?: string }) => run === "pnpm exec gulp gen-icons-json build-translations",
+      ({ run }: { run?: string }) =>
+        run === "pnpm exec gulp gen-icons-json build-translations build-locale-data",
     ),
   ).toBe(true);
   expect(
     ci.jobs.coverage.steps.find(({ uses }: { uses?: string }) => uses?.startsWith("codecov/")).with
       .directory,
   ).toBe("./test/coverage");
+});
+
+it.each([
+  ["lint", "pnpm run lint:lit"],
+  ["types", "pnpm run lint:types"],
+  ["test", "pnpm test --exclude '**/.worktrees/**'"],
+  ["coverage", "pnpm run test:coverage"],
+])("generates HA build inputs before the shared %s checks", (role, command) => {
+  const steps = workflow("ci").jobs[role].steps;
+  const setupIndex = steps.findIndex(
+    ({ uses }: { uses?: string }) => uses === "./.github/actions/setup",
+  );
+  const generateIndex = steps.findIndex(({ run }: { run?: string }) =>
+    run?.endsWith("pnpm exec gulp gen-icons-json build-translations build-locale-data"),
+  );
+  const checkIndex = steps.findIndex(({ run }: { run?: string }) => run === command);
+  expect(setupIndex).toBeGreaterThan(-1);
+  expect(generateIndex).toBeGreaterThan(setupIndex);
+  expect(checkIndex).toBeGreaterThan(generateIndex);
+  expect(steps[generateIndex].if).toBeUndefined();
+  if (role === "test" || role === "coverage") {
+    expect(steps[generateIndex].run).toBe(
+      "SKIP_FETCH_NIGHTLY_TRANSLATIONS=1 pnpm exec gulp gen-icons-json build-translations build-locale-data",
+    );
+  }
 });

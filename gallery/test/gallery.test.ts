@@ -41,13 +41,7 @@ it("emits isolated gallery and preview entries outside the Python package", asyn
     expect(
       (await readFile(join(output, "static/fonts/roboto/Roboto-Regular.woff2"))).byteLength,
     ).toBeGreaterThan(0);
-    // HA's demo brand images resolve to these offline fixtures instead of the public CDN.
-    const images = await Promise.all(
-      ["icon.png", "dark_icon.png"].map((image) =>
-        readFile(join(output, "static/brands/knx", image)),
-      ),
-    );
-    for (const image of images) expect(image.byteLength).toBeGreaterThan(0);
+    expect(await readdir(join(output, "static"))).not.toContain("brands");
     const index = await readFile(join(output, "index.html"), "utf8");
     const preview = await readFile(join(output, "preview.html"), "utf8");
     expect(index).toContain('src="/gallery.dev.js"');

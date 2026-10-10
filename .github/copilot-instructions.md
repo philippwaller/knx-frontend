@@ -175,7 +175,7 @@ Consider its affected gallery examples every time. Create an example for a new
 production custom element, and update affected examples as part of implementation
 when public interfaces, supported states or interaction behavior change. Use the
 skill's maintained references and the [Gallery README](../gallery/README.md) for
-authoring and separate Gallery verification commands.
+authoring and focused Gallery verification aliases; default checks include Gallery.
 
 ## Testing
 
@@ -208,7 +208,7 @@ authoring and separate Gallery verification commands.
 
 ### Code Quality & Linting
 
-- `pnpm lint`: Run all linting (ESLint + Prettier + TypeScript + Lit analyzer)
+- `pnpm lint`: Run all product and Gallery linting (ESLint + Prettier + TypeScript + Lit analyzer + Gallery tool syntax)
 - `pnpm lint:eslint`: ESLint only
 - `pnpm lint:prettier`: Prettier formatting check
 - `pnpm lint:types`: TypeScript compiler check
@@ -219,7 +219,7 @@ authoring and separate Gallery verification commands.
 
 ### Testing
 
-- `pnpm test`: Run Vitest tests once
+- `pnpm test`: Run product and Gallery Vitest tests once
 - `pnpm test:watch`: Run Vitest in watch mode
 - `pnpm test:coverage`: Run tests with coverage report
 

@@ -3,12 +3,6 @@
   "compilerOptions": {
     "tsBuildInfoFile": "../node_modules/.cache/typescript/.gallery.tsbuildinfo"
   },
-  "include": [
-    "src/**/*.ts",
-    "test/**/*.ts",
-    "vitest.config.ts",
-    "../src/**/*.ts",
-    "../homeassistant-frontend/src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts", "test/**/*.ts", "../homeassistant-frontend/src/**/*.ts"],
   "exclude": ["test/coverage"]
 }

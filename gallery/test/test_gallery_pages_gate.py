@@ -22,6 +22,7 @@ class MainGateTests(unittest.TestCase):
         self.repo = self.root / "repo"
         self.remote = self.root / "remote.git"
         self.output = self.root / "output"
+        self.pages_url = "https://example.test/demo/"
         env = patch.dict(os.environ, {"GITHUB_REPOSITORY": "owner/repo",
             "GITHUB_EVENT_NAME": "push", "GALLERY_PAGES_ENABLED": "true",
             "GITHUB_OUTPUT": str(self.output), "GIT_CONFIG_GLOBAL": os.devnull,
@@ -48,7 +49,7 @@ class MainGateTests(unittest.TestCase):
     @staticmethod
     def entry(sha):
         return dict(sha=sha, run_id=10, run_attempt=1, artifact_id=20,
-                    comment_id=None, actor_id=2)
+                    comment_id=None, actor_id=2, layout="gallery")
 
     def write(self, path, text):
         target = self.repo / path
@@ -65,7 +66,7 @@ class MainGateTests(unittest.TestCase):
 
     def api(self, method, path, body=None):
         if method == "GET" and path == "/repos/owner/repo/pages":
-            return {"html_url": "https://example.test/demo/"}
+            return {"html_url": self.pages_url}
         prefix = "/repos/owner/repo/contents/" + pages.site.STATE + "?ref="
         if method == "GET" and path.startswith(prefix):
             ref = path[len(prefix):]
@@ -80,7 +81,19 @@ class MainGateTests(unittest.TestCase):
 
     def assert_build(self, sha):
         self.assertEqual(self.gate(sha),
-            f"build=false\nbuild=true\nsha={sha}\npr_number=\nbase_path=/demo/\n")
+            f"build=false\nbuild=true\nsha={sha}\npr_number=\nbase_path=/demo/gallery/\n")
+
+    def test_legacy_main_rebuilds_even_when_same_head_is_already_published(self):
+        self.confirmed["main"].pop("layout")
+        self.assert_build(self.base)
+
+    def test_pages_root_and_project_url_prefixes_build_under_gallery(self):
+        for url, expected in [("https://custom.test/", "/gallery/"),
+                              ("https://owner.github.io/repo", "/repo/gallery/")]:
+            with self.subTest(url=url):
+                self.pages_url = url
+                self.confirmed["main"] = None
+                self.assertIn(f"base_path={expected}\n", self.gate(self.base))
 
     def test_docs_after_confirmed_source_baseline_skip(self):
         self.write("README.md", "documentation only")
