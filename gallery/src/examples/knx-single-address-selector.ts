@@ -58,3 +58,5 @@ export const entry = defineExample({
     };
   },
 });
+
+// Fork-only publication lifecycle rehearsal, revision 1.
