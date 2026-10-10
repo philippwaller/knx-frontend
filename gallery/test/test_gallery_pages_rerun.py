@@ -61,6 +61,37 @@ class NativeRerunTests(unittest.TestCase):
         self.assertIn("build=true", self.gate())
         self.assertIn("sha=" + SHA, self.output.read_text())
         self.assertEqual(self.writes, [])
+        self.assertIn("base_path=/repo/pr/12/gallery/\n", self.output.read_text())
+
+    def test_same_head_legacy_preview_builds_again_at_new_path(self):
+        state = pages.site.empty_state("owner/repo")
+        state["previews"]["12"] = {"sha": SHA}
+        with patch.object(pages, "published_remote_state", return_value=state):
+            pages.gate({"pull_request": pull()})
+        self.assertIn("base_path=/repo/pr/12/gallery/\n", self.output.read_text())
+
+    def test_same_head_namespaced_preview_skips_rebuilding(self):
+        state = pages.site.empty_state("owner/repo")
+        state["previews"]["12"] = {"sha": SHA, "layout": "gallery"}
+        with patch.object(pages, "published_remote_state", return_value=state):
+            pages.gate({"pull_request": pull()})
+        self.assertEqual(self.output.read_text(), "build=false\n")
+
+    def test_new_preview_comment_links_namespaced_component_on_custom_domain(self):
+        published = {"sha": SHA, "run_id": 8, "layout": "gallery", "changes": {
+            "components": [{"id": "address-input", "title": "Address input"}], "shared": False}}
+        body = pages.status_body(self.pr, published, "https://custom.test/")
+        self.assertIn("[Open preview →](https://custom.test/pr/12/gallery/)", body)
+        self.assertIn("https://custom.test/pr/12/gallery/?component=address-input&scenario=default", body)
+        self.assertIn("🟢 Ready", body)
+
+    def test_legacy_ready_preview_retains_original_component_url(self):
+        published = {"sha": SHA, "run_id": 8, "changes": {
+            "components": [{"id": "address-input", "title": "Address input"}], "shared": False}}
+        body = pages.status_body(self.pr, published, "https://example.test/repo/")
+        self.assertIn("[Open preview →](https://example.test/repo/pr/12/)", body)
+        self.assertIn("https://example.test/repo/pr/12/?component=address-input&scenario=default", body)
+        self.assertNotIn("pr/12/gallery/", body)
 
     def test_publisher_independently_accepts_the_maintainer_rerun(self):
         resolved = pages.resolve_build_run({"workflow_run": {"id": 10, "run_attempt": 2}})

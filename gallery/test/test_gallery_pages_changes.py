@@ -118,12 +118,12 @@ class PreviewChangesTests(unittest.TestCase):
 
     def test_large_component_lists_keep_the_comment_bounded_and_link_the_overview(self):
         pr = {"number": 12, "state": "open", "head": {"sha": self.base}}
-        body = pages.status_body(pr, {"sha": self.base, "run_id": 10, "changes": {
+        body = pages.status_body(pr, {"sha": self.base, "run_id": 10, "layout": "gallery", "changes": {
             "components": [{"id": f"input-{i}" + "x" * 100, "title": "Input" + "x" * 150}
                            for i in range(600)], "shared": False}}, "https://example.test/demo/")
         self.assertLess(len(body), 60000)
         self.assertIn("more components", body)
-        self.assertIn("[Browse all examples](https://example.test/demo/pr/12/)", body)
+        self.assertIn("[Browse all examples](https://example.test/demo/pr/12/gallery/)", body)
         self.assertIn("component=input-0", body)
 
     def test_catalog_rejects_ambiguous_owners_and_oversized_data(self):
