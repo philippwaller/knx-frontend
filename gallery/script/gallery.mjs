@@ -58,7 +58,6 @@ export function createGalleryConfig({
     new CopyRspackPlugin({
       patterns: [
         { from: "gallery/serve.json", to: "serve.json" },
-        { from: "gallery/brands", to: "static/brands" },
         { from: "homeassistant-frontend/build/mdi", to: "static/mdi" },
         {
           from: "*/en.json",

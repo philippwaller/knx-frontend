@@ -29,6 +29,8 @@ export default defineConfig({
       "src/**/*.{test,spec}.ts",
       "test/**/*.{test,spec}.ts",
       "build-scripts/**/*.{test,spec}.ts",
+      "gallery/src/**/*.{test,spec}.ts",
+      "gallery/test/**/*.{test,spec}.ts",
     ],
     exclude: [
       "homeassistant-frontend/**/*",
@@ -39,6 +41,8 @@ export default defineConfig({
       "**/.worktrees/**",
       "test/**/*.e2e.ts",
       "test/playwright.*.ts",
+      "gallery/test/**/*.e2e.ts",
+      "gallery/test/playwright.*.ts",
     ],
     bail: 0, // Don't stop after first failure, run all tests
     coverage: {

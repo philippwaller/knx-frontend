@@ -1,5 +1,6 @@
 import { expect, test as base, type FrameLocator, type Locator, type Page } from "@playwright/test";
 import { catalog, catalogGroups } from "../src/catalog";
+import { mockGalleryBrand } from "./brands";
 
 // Every browser test fails on real console/page errors or accidental backend traffic.
 const test = base.extend<{ checkedPage: undefined }>({
@@ -22,6 +23,7 @@ const test = base.extend<{ checkedPage: undefined }>({
         }
       });
       await page.route("**/*", async (route) => {
+        if (await mockGalleryBrand(route)) return;
         const url = new URL(route.request().url());
         if (unexpected(url)) {
           failures.push(`Unexpected request: ${url.href}`);
@@ -44,6 +46,24 @@ const test = base.extend<{ checkedPage: undefined }>({
     },
     { auto: true },
   ],
+});
+
+test("dashboard loads light and dark brands from the placeholder-enabled CDN", async ({ page }) => {
+  await page.goto("./?component=knx-dashboard&scenario=default");
+  await expect(page.getByRole("status")).toHaveText("Preview ready");
+  await page.getByRole("button", { name: /^Compare/ }).click();
+  const light = page.frameLocator('iframe[data-pane="primary"]').locator("img.logo");
+  const dark = page.frameLocator('iframe[data-pane="comparison"]').locator("img.logo");
+  await expect(light).toHaveAttribute("src", "https://brands.home-assistant.io/_/knx/icon.png");
+  await expect(dark).toHaveAttribute("src", "https://brands.home-assistant.io/_/knx/dark_icon.png");
+  await Promise.all(
+    [light, dark].map(async (image) => {
+      await expect(image).toBeVisible();
+      await expect
+        .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+        .toBeGreaterThan(0);
+    }),
+  );
 });
 
 // HA toggle visuals cover their native inputs; exercise their keyboard contract.
@@ -830,26 +850,30 @@ test("catalog shows both names and relationship links navigate in both direction
   await expect(page).toHaveURL(/component=knx-tabs-subpage-data/);
 });
 
-test("component names and relationships stay usable on a narrow screen", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("./?component=knx-tabs-subpage-data&scenario=default");
-  await page.locator(".heading .catalog-toggle").click();
-  const longName = page.getByRole("navigation", { name: "Catalog" }).getByRole("link", {
-    name: "Telegram information dialog knx-group-monitor-telegram-info-dialog",
-    exact: true,
-  });
-  await longName.scrollIntoViewIfNeeded();
-  await expect(longName).toContainText("knx-group-monitor-telegram-info-dialog");
-  expect(await longName.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-  await page.locator(".heading .catalog-toggle").click();
-  await page.getByRole("button", { name: "Open inspector", exact: true }).click();
-  await page
-    .getByRole("region", { name: "Relationships", exact: true })
-    .getByRole("link", { name: "knx-tabs-subpage-data-toolbar", exact: true })
-    .click();
-  await expect(page).toHaveURL(/component=knx-tabs-subpage-data-toolbar/);
-  await expect(page.getByRole("button", { name: "Open inspector", exact: true })).toBeVisible();
-});
+test(
+  "component names and relationships stay usable on a narrow screen",
+  { tag: "@mobile" },
+  async ({ page, isMobile }) => {
+    if (!isMobile) await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("./?component=knx-tabs-subpage-data&scenario=default");
+    await page.locator(".heading .catalog-toggle").click();
+    const longName = page.getByRole("navigation", { name: "Catalog" }).getByRole("link", {
+      name: "Telegram information dialog knx-group-monitor-telegram-info-dialog",
+      exact: true,
+    });
+    await longName.scrollIntoViewIfNeeded();
+    await expect(longName).toContainText("knx-group-monitor-telegram-info-dialog");
+    expect(await longName.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.locator(".heading .catalog-toggle").click();
+    await page.getByRole("button", { name: "Open inspector", exact: true }).click();
+    await page
+      .getByRole("region", { name: "Relationships", exact: true })
+      .getByRole("link", { name: "knx-tabs-subpage-data-toolbar", exact: true })
+      .click();
+    await expect(page).toHaveURL(/component=knx-tabs-subpage-data-toolbar/);
+    await expect(page.getByRole("button", { name: "Open inspector", exact: true })).toBeVisible();
+  },
+);
 
 test("scenario tabs navigate directly without moving the canvas", async ({ page }) => {
   await page.goto("./?component=knx-tabs-subpage-data&scenario=default");
@@ -2015,20 +2039,22 @@ for (const width of [1600, 390]) {
   });
 }
 
-test("first mobile catalog selection returns focus to the current menu button", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("./");
-  await page.getByRole("button", { name: "Open catalog", exact: true }).click();
-  const nav = page.getByRole("navigation", { name: "Catalog" });
-  await nav
-    .getByRole("link", { name: "Tabs subpage data knx-tabs-subpage-data", exact: true })
-    .click();
-  await expect(page).toHaveURL(/component=knx-tabs-subpage-data/);
-  await expect(nav).toBeHidden();
-  await expect(page.getByRole("button", { name: "Open catalog", exact: true })).toBeFocused();
-});
+test(
+  "first mobile catalog selection returns focus to the current menu button",
+  { tag: "@mobile" },
+  async ({ page, isMobile }) => {
+    if (!isMobile) await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("./");
+    await page.getByRole("button", { name: "Open catalog", exact: true }).click();
+    const nav = page.getByRole("navigation", { name: "Catalog" });
+    await nav
+      .getByRole("link", { name: "Tabs subpage data knx-tabs-subpage-data", exact: true })
+      .click();
+    await expect(page).toHaveURL(/component=knx-tabs-subpage-data/);
+    await expect(nav).toBeHidden();
+    await expect(page.getByRole("button", { name: "Open catalog", exact: true })).toBeFocused();
+  },
+);
 
 test("HA editor controls preserve typed values and reset invalid drafts", async ({ page }) => {
   await page.goto("./");
@@ -3907,19 +3933,23 @@ test("overview shows generated dialog images without mounting previews", async (
   await page.screenshot({ path: test.info().outputPath("overview-dialogs.png") });
 });
 
-test("overview search works on mobile without horizontal overflow", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("./");
-  await page.getByRole("button", { name: "Open catalog", exact: true }).click();
-  await page.getByRole("searchbox").fill("knx-info");
-  await page.getByRole("link", { name: "Overview", exact: true }).click();
-  await expect(page.locator(".overview-card")).toHaveCount(1);
-  await expect(page.locator('.overview-card [data-state="ready"]')).toBeVisible();
-  expect(await page.locator(".overview").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
-    true,
-  );
-  await page.screenshot({ path: test.info().outputPath("overview-mobile.png") });
-});
+test(
+  "overview search works on mobile without horizontal overflow",
+  { tag: "@mobile" },
+  async ({ page, isMobile }) => {
+    if (!isMobile) await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("./");
+    await page.getByRole("button", { name: "Open catalog", exact: true }).click();
+    await page.getByRole("searchbox").fill("knx-info");
+    await page.getByRole("link", { name: "Overview", exact: true }).click();
+    await expect(page.locator(".overview-card")).toHaveCount(1);
+    await expect(page.locator('.overview-card [data-state="ready"]')).toBeVisible();
+    expect(await page.locator(".overview").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: test.info().outputPath("overview-mobile.png") });
+  },
+);
 
 // A missing asset or a broken theme URL must fail even for cards initially offscreen.
 test("overview loads every generated thumbnail in both themes", async ({ page }) => {
@@ -4857,4 +4887,143 @@ test("outcome migration keeps a delayed user telegram after writer handoff witho
   await expect(
     page.locator("knx-gallery-event-log li").filter({ hasText: /api: .*knx\.read/ }),
   ).toHaveCount(1);
+});
+
+// Mobile-only regressions use the same strict console/network fixture as desktop.
+test.describe("Pixel 7 touch", { tag: ["@mobile", "@mobile-touch"] }, () => {
+  test("emulates a mobile touch device rather than only a narrow viewport", async ({
+    page,
+    isMobile,
+  }) => {
+    expect(isMobile).toBe(true);
+    await page.goto("./?component=knx-separator&scenario=default");
+    await expect(page.getByRole("status")).toHaveText("Preview ready");
+    expect(
+      await page.evaluate(() => ({
+        touchPoints: navigator.maxTouchPoints,
+        coarsePointer: matchMedia("(pointer: coarse)").matches,
+        mobileUserAgent: /Android.*Mobile/.test(navigator.userAgent),
+        viewportWidth: innerWidth,
+        screenWidth: screen.width,
+        pixelRatio: devicePixelRatio,
+      })),
+    ).toEqual({
+      touchPoints: 1,
+      coarsePointer: true,
+      mobileUserAgent: true,
+      viewportWidth: 412,
+      screenWidth: 412,
+      pixelRatio: 2.625,
+    });
+    await page.getByRole("button", { name: "Open inspector", exact: true }).tap();
+    await expect(page.locator(".inspector")).toBeVisible();
+  });
+
+  test("inspector opens and touch scroll reaches the last interface and returns to the top", async ({
+    page,
+  }) => {
+    await page.goto("./?component=knx-tabs-subpage-data&scenario=default");
+    await expect(page.getByRole("status")).toHaveText("Preview ready");
+    await page.getByRole("button", { name: "Open inspector", exact: true }).tap();
+    const inspector = page.locator(".inspector");
+    const fields = inspector.locator(".inspector-fields");
+    const box = (await fields.boundingBox())!;
+    const session = await page.context().newCDPSession(page);
+    const repeatCount = Math.ceil(await fields.evaluate((el) => el.scrollHeight / 400));
+    await fields.evaluate((element) => {
+      element.addEventListener(
+        "touchmove",
+        (event) => {
+          element.setAttribute("data-trusted-touch-move", String(event.isTrusted));
+        },
+        { once: true, passive: true },
+      );
+    });
+    // Use the native touch stream behind Playwright tap; synthetic scroll gestures
+    // return successfully without scrolling in the Linux headless container.
+    const swipe = async (direction: 1 | -1) => {
+      const y = direction === 1 ? box.y + box.height - 40 : box.y + 40;
+      for (let repeat = 0; repeat <= repeatCount; repeat++) {
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchStart",
+          touchPoints: [{ x: box.x + box.width / 2, y }],
+        });
+        for (let step = 1; step <= 8; step++) {
+          await session.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: box.x + box.width / 2, y: y - (direction * 400 * step) / 8 }],
+          });
+          await page.evaluate(
+            () =>
+              new Promise<void>((resolve) => {
+                requestAnimationFrame(() => resolve());
+              }),
+          );
+        }
+        await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      }
+    };
+    await swipe(1);
+    await expect(fields).toHaveAttribute("data-trusted-touch-move", "true");
+    await expect(fields.locator(".api-entry").last()).toBeInViewport();
+    await expect(
+      inspector.getByRole("searchbox", { name: "Search properties or functions", exact: true }),
+    ).toBeInViewport();
+    await swipe(-1);
+    await expect.poll(() => fields.evaluate((element) => element.scrollTop)).toBe(0);
+    await expect(fields.locator(".component-context")).toBeInViewport();
+    await inspector.getByRole("button", { name: "Close inspector", exact: true }).tap();
+    await expect(inspector).toBeHidden();
+    await expect(page.getByRole("button", { name: "Open inspector", exact: true })).toBeVisible();
+    await session.detach();
+  });
+
+  test("catalog and scenario navigation respond to touch", async ({ page }) => {
+    await page.goto("./");
+    await page.getByRole("button", { name: "Open catalog", exact: true }).tap();
+    const nav = page.getByRole("navigation", { name: "Catalog", exact: true });
+    await nav.getByRole("link", { name: "Separator knx-separator", exact: true }).tap();
+    await expect(page).toHaveURL(/component=knx-separator&scenario=default$/);
+    await expect(nav).toBeHidden();
+    await expect(page.getByRole("status")).toHaveText("Preview ready");
+    await page.locator("#gallery-scenario ha-picker-field").tap();
+    await page
+      .locator("#gallery-scenario")
+      .getByRole("menuitem", { name: "Expanded", exact: true })
+      .tap();
+    await expect(page).toHaveURL(/component=knx-separator&scenario=expanded$/);
+    await expect(page.getByRole("status")).toHaveText("Preview ready");
+  });
+
+  test("compact toolbar device, theme and view actions respond to touch", async ({ page }) => {
+    await page.goto("./?component=knx-single-address-selector&scenario=default");
+    await expect(page.getByRole("status")).toHaveText("Preview ready");
+    const toolbar = page.locator(".canvas-toolbar");
+    const frame = page.locator('iframe[data-pane="primary"]');
+    const session = await frame.getAttribute("src");
+    await toolbar.locator(".device-menu").getByRole("button").tap();
+    await page.getByRole("menuitemcheckbox", { name: "Tablet · 768 px", exact: true }).tap();
+    await page.getByRole("menuitemcheckbox", { name: "Phone · 390 px", exact: true }).tap();
+    await toolbar.locator(".device-menu").getByRole("button").tap();
+    await expect
+      .poll(() => frame.evaluate((el: HTMLIFrameElement) => el.contentWindow!.innerWidth))
+      .toBe(768);
+    await toolbar.locator(".theme-mode-menu").getByRole("button").tap();
+    await page.getByRole("menuitem", { name: "Dark", exact: true }).tap();
+    await expect(toolbar.locator(".theme-mode-menu").getByRole("button")).toHaveAccessibleName(
+      /Dark/,
+    );
+    await toolbar.locator(".view-mode-menu").getByRole("button").tap();
+    await page.getByRole("menuitem", { name: "Split", exact: true }).tap();
+    await expect(page.getByRole("region", { name: "Lit usage", exact: true })).toBeVisible();
+    await toolbar.getByRole("button", { name: "Preview options", exact: true }).tap();
+    await page
+      .locator(".preview-options")
+      .getByRole("button", { name: /^Auto height/ })
+      .tap();
+    await expect(
+      page.locator(".preview-options").getByRole("button", { name: /^Auto height/ }),
+    ).toHaveAccessibleName("Auto height · Selected");
+    await expect(frame).toHaveAttribute("src", session!);
+  });
 });

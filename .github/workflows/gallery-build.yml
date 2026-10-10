@@ -52,6 +52,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
   # Every PR validates its exact head, including forks without an approved preview.
+  # Focused aliases share default check configuration without rerunning all product checks.
   checks:
     runs-on: ubuntu-latest
     permissions:
@@ -74,6 +75,9 @@ jobs:
     needs: [gate, checks]
     if: needs.gate.outputs.build == 'true'
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --user 1001 --ipc=host
     timeout-minutes: 30
     permissions:
       contents: read
@@ -88,6 +92,8 @@ jobs:
       # This entire job is untrusted, including PR changes to setup/build scripts.
       # Fork/PR caches are scoped to the PR ref; the publisher never restores caches.
       - uses: ./.github/actions/setup
+        with:
+          dependency-cache-prefix: knx-frontend-deps-playwright-v1.63.0-noble
       - name: Restore Babel cache
         id: babel-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -97,8 +103,6 @@ jobs:
           restore-keys: |
             gallery-babel-loader-${{ runner.os }}-${{ github.job }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}-
             babel-loader-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
       - name: Build gallery and thumbnails
         run: pnpm gallery:build
         env:
@@ -128,6 +132,9 @@ jobs:
   browser-tests:
     needs: [gate, build]
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --user 1001 --ipc=host
     timeout-minutes: 30
     permissions:
       contents: read
@@ -144,16 +151,67 @@ jobs:
           submodules: recursive
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          dependency-cache-prefix: knx-frontend-deps-playwright-v1.63.0-noble
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: gallery-${{ github.run_id }}-${{ github.run_attempt }}
           path: build/gallery/
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
       - name: Test interactive gallery
         run: pnpm gallery:test --workers=2 --shard=${{ matrix.shard }}/2
         env:
           GALLERY_E2E_PRODUCTION: "1"
+      - name: Upload shard blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gallery-test-report-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: blob-report/gallery/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload shard failure attachments
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gallery-test-results-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: test-results/gallery/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # Native blobs include attachments; report merging needs no browsers or write token.
+  # Failure still fails the shard/workflow, while diagnostics remain available for review.
+  merge-reports:
+    needs: [gate, browser-tests]
+    if: ${{ !cancelled() && needs.browser-tests.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Download current-attempt shard reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: gallery-test-report-${{ github.run_attempt }}-*
+          path: all-blob-reports/
+          merge-multiple: true
+      - name: Merge Playwright reports
+        run: pnpm exec playwright merge-reports --reporter html all-blob-reports
+      - name: Upload merged HTML report and attachments
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gallery-test-report-html-${{ github.run_attempt }}
+          path: playwright-report/
+          retention-days: 14
+          if-no-files-found: error
 
   release-check:
     needs: [gate, build]
