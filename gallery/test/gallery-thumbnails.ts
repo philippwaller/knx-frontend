@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { catalog } from "../src/catalog";
 import type { GalleryConfigureMessage } from "../src/types";
+import { mockGalleryBrand } from "./brands";
 
 test("publish catalog metadata for PR preview links", async () => {
   const output = resolve("build/gallery");
@@ -24,6 +25,7 @@ for (const { meta } of catalog) {
         if (message.type() === "error") failures.push(message.text());
       });
       await page.route("**/*", async (route) => {
+        if (await mockGalleryBrand(route)) return;
         const url = new URL(route.request().url());
         if (
           url.origin !== new URL(baseURL!).origin ||
