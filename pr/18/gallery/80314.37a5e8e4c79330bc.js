@@ -1,2 +1,0 @@
-export const __rspack_esm_id=80314;export const __rspack_esm_ids=[80314];export const __webpack_modules__={54305(e,s,r){function t(){return{light:[{name:"ga_switch",type:"knx_group_address",required:!0,options:{write:{required:!0},state:{required:!1},validDPTs:[{main:1,sub:1}]}}],sensor:[{name:"ga_sensor",type:"knx_group_address",required:!0,options:{state:{required:!0},dptClasses:["numeric","string"]}}]}}r.d(s,{createSchemas:()=>t})}};
-//# sourceMappingURL=80314.37a5e8e4c79330bc.js.map
