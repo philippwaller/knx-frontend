@@ -1,0 +1,2 @@
+export const __rspack_esm_id=49718;export const __rspack_esm_ids=[49718];export const __webpack_modules__={85668(e,s,t){t.d(s,{},{C:(e,s)=>{console.error(`[KNX] "${e}" is stubbed out in this build, so ${s} does not work here. The KNX panel is not supposed to need it — if it does, remove the entry from build-scripts/stubs.cjs.`)}})},99189(e,s,t){(0,t(85668).C)("hls.js","playing camera streams that the browser cannot play natively");t.d(s,{},{default:{isSupported:()=>!1}})}};
+//# sourceMappingURL=49718.c5dcd2051c875607.js.map
