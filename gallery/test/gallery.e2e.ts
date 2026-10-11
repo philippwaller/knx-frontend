@@ -5199,11 +5199,3 @@ test.describe("Pixel 7 touch", { tag: ["@mobile", "@mobile-touch"] }, () => {
     await expect(frame).toHaveAttribute("src", session!);
   });
 });
-
-test("rehearsal: controlled failure retains HTML diagnostics and the previous preview", async ({
-  page,
-}) => {
-  await page.goto("./?component=knx-single-address-selector&scenario=default");
-  await expect(page.getByRole("status")).toHaveText("Preview ready");
-  expect("intentional fork-only rehearsal failure").toBe("success");
-});
