@@ -59,8 +59,8 @@ into your Home Assistant configuration directory.
 
 Assuming:
 
-* The `knx-frontend` repository is located at `<knx-frontend-dir>` path
-* The `home-assistant-core` repository is located at `<hass-dir>` path (Remark: per default the Home Assistant configuration directory will be created within `<hass-dir>/config`)
+- The `knx-frontend` repository is located at `<knx-frontend-dir>` path
+- The `home-assistant-core` repository is located at `<hass-dir>` path (Remark: per default the Home Assistant configuration directory will be created within `<hass-dir>/config`)
 
 ```shell
 $ ln -s <knx-frontend-dir>/knx_frontend <hass-dir>/config/deps/lib/python3.xx/site-packages/
@@ -91,11 +91,13 @@ On Home Assistant OS you might use https://github.com/home-assistant/addons-deve
 
 This repository ships a set of instructions for AI coding agents.
 
-* GitHub Copilot comes pre-configured — its guidance lives in `.github/copilot-instructions.md`.
-* For other agents, you can easy symlink the Copilot instructions with:
+- GitHub Copilot comes pre-configured — its guidance lives in `.github/copilot-instructions.md`.
+- For other agents, you can easy symlink the Copilot instructions with:
 
-    ```shell
-    pnpm agent:claude   # Creates CLAUDE.md
-    pnpm agent:gemini   # Creates GEMINI.md  
-    pnpm agent:codex    # Creates AGENTS.md
-    ```
+  ```shell
+  pnpm agent:claude   # Creates CLAUDE.md
+  pnpm agent:gemini   # Creates GEMINI.md
+  pnpm agent:codex    # Creates AGENTS.md
+  ```
+
+<!-- Fork-only documentation change to exercise explicit maintainer rerun. -->
