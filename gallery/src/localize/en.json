@@ -639,20 +639,39 @@
         "backendLocalize": "Backend localize"
       }
     },
+    "knx-duration-selector": {
+      "title": "Duration selector",
+      "description": "Home Assistant Duration input with seconds as its public value.",
+      "api": {
+        "value": "Configured duration in seconds, including milliseconds as fractional seconds.",
+        "disabled": "Disable editing the duration.",
+        "hass": "Current offline Home Assistant instance supplied by the preview environment.",
+        "selector": "Non-negative Duration schema with days and milliseconds enabled.",
+        "value-changed": "Emits the selected duration in seconds, or undefined when cleared."
+      },
+      "labels": {
+        "value": "Seconds",
+        "disabled": "Disabled",
+        "hass": "Hass",
+        "selector": "Selector",
+        "value-changed": "Value-changed"
+      }
+    },
     "knx-selector-row": {
       "title": "Selector row",
-      "description": "Home Assistant number selector with optional enable switch and validation.",
+      "description": "Home Assistant number or duration selector with optional enable switch and validation.",
       "api": {
         "key": "Configuration path used to identify selector changes.",
-        "value": "Current public selection or value. User changes are recorded in the event log.",
+        "value": "Current public value. Duration values use seconds, including fractional seconds.",
         "required": "Require a value instead of offering optional enable/clear behavior.",
         "invalid": "Show the scenario validation error, or the public invalid styling where supported.",
         "default": "Default content",
-        "value-changed": "Emits value-changed with the public event detail.",
+        "value-changed": "Emits value-changed with the public value. Duration values are in seconds.",
         "validationErrors": "Scenario-controlled backend validation errors, using the existing ErrorDescription contract.",
         "localizeFunction": "Observed callback resolves local Home Assistant KNX backend translations; missing demo field labels use gallery text.",
         "hass": "Current offline Home Assistant instance supplied by the preview environment.",
-        "selector": "Number schema (0–100); required control switches between required and optional row behavior."
+        "selector": "Number schema (0–100) or duration schema in the Duration scenario; required controls optional row behavior.",
+        "duration": "Show the duration selector with a seconds-based public value."
       },
       "labels": {
         "key": "Key",
@@ -664,7 +683,8 @@
         "validationErrors": "Validation errors",
         "localizeFunction": "Localize function",
         "hass": "Hass",
-        "selector": "Selector"
+        "selector": "Selector",
+        "duration": "Duration"
       }
     },
     "knx-sync-state-selector-row": {
@@ -1092,6 +1112,8 @@
     "mobile": "Mobile",
     "invalid": "Invalid",
     "optional": "Optional",
+    "duration": "Duration",
+    "zero": "Zero",
     "periodic": "Periodic",
     "never": "Never",
     "raw": "Raw",

@@ -4623,6 +4623,22 @@ test("binary sensor heartbeat over one day shows seconds and milliseconds", asyn
   await expect(time.locator('input[name="milliseconds"]')).toHaveCount(1);
 });
 
+test("KNX Duration selector keeps seconds after a millisecond edit", async ({ page }) => {
+  await openExample(page, "knx-duration-selector");
+  const preview = page.frameLocator('iframe[data-pane="primary"]');
+  const duration = preview.locator("knx-duration-selector");
+  await expect(duration).toHaveJSProperty("value", 90_001.5);
+  const milliseconds = duration.locator('ha-base-time-input input[name="milliseconds"]');
+  await milliseconds.fill("250");
+  await milliseconds.press("Tab");
+  await expect(duration).toHaveJSProperty("value", 90_001.25);
+  await expect(page.locator("knx-gallery-event-log")).toContainText("90001.25");
+
+  await openExample(page, "knx-selector-row", "duration");
+  const row = page.frameLocator('iframe[data-pane="primary"]').locator("knx-selector-row");
+  await expect(row.locator("knx-duration-selector")).toHaveJSProperty("value", 90_001.5);
+});
+
 test("binary sensor without reset keeps the optional Duration field disabled", async ({ page }) => {
   await openExample(page, "knx-configure-entity", "heartbeat-unset");
   const preview = page.frameLocator('iframe[data-pane="primary"]');

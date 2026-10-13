@@ -6,7 +6,7 @@ export const entry = defineExample({
   tag: "knx-selector-row",
   copy,
   properties: { key: "brightness", value: 40 },
-  exampleOptions: { required: true, invalid: false },
+  exampleOptions: { required: true, invalid: false, duration: false },
   slots: [""],
   events: ["value-changed"],
   suppliedProperties: ["validationErrors", "hass", "selector"],
@@ -14,6 +14,11 @@ export const entry = defineExample({
   scenarios: [
     { id: "optional", label: en.scenarios["optional"], values: { required: false } },
     { id: "invalid", label: en.scenarios["invalid"], values: { invalid: true } },
+    {
+      id: "duration",
+      label: en.scenarios["duration"],
+      values: { key: "cooldown", value: 90_001.5, required: false, duration: true },
+    },
   ],
   interaction: { state: ["value", "_enabled", "_haSelectorValue"] },
   async load() {
@@ -30,7 +35,7 @@ export const entry = defineExample({
           .key=${values.key}
           .value=${values.value}
           .hass=${env.hass}
-          .selector=${{ type: "ha_selector" as const, name: "brightness", required: values.required as boolean, selector: { number: { min: 0, max: 100, mode: "box" as const } } }}
+          .selector=${{ type: "ha_selector" as const, name: values.key as string, required: values.required as boolean, selector: values.duration ? { duration: { allow_negative: false, enable_day: true, enable_millisecond: true } } : { number: { min: 0, max: 100, mode: "box" as const } } }}
           .validationErrors=${values.invalid ? [{ path: [], message: en.sample.invalid, code: null }] : undefined}
           .localizeFunction=${localize}
           @value-changed=${changed}
