@@ -38,7 +38,14 @@ export function createSchemas(): Record<string, SelectorSchema[]> {
       {
         name: "reset_after",
         type: "ha_selector",
-        selector: { number: { min: 0, step: 0.001, mode: "box", unit_of_measurement: "s" } },
+        selector: {
+          duration: {
+            allow_negative: false,
+            enable_day: true,
+            enable_millisecond: true,
+            enable_second: true,
+          },
+        },
       },
     ],
   };

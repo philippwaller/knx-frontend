@@ -18,11 +18,13 @@ class TranslationTests(unittest.TestCase):
             }},
             ("component", "light"): {"title": "Light"},
             ("component", "sensor"): {"title": "Sensor"},
+            ("component", "binary_sensor"): {"title": "Binary sensor"},
         }
         with patch.object(translations, "source", side_effect=sources.__getitem__):
             self.assertEqual(translations.generate(), {
                 "component.knx.config_panel.future.title": "On",
                 "component.knx.config_panel.used": "On",
+                "component.binary_sensor.title": "Binary sensor",
                 "component.light.title": "Light", "component.sensor.title": "Sensor",
             })
 
