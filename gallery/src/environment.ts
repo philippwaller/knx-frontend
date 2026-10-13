@@ -410,9 +410,8 @@ export async function createEnvironment(
   try {
     await current().updateTranslations(null, "en");
     await current().updateTranslations("config", "en");
-    // The product requests raw_payload_base_label, absent from Core d8668bb.
-    // Keep its offline fixture separate from the copied Core translations.
-    await current().addTranslations({ ...en.backendFixtures, ...backendEn }, "en");
+    // Keep pending Core strings separate from the generated translation snapshot.
+    await current().addTranslations({ ...backendEn, ...en.backendFixtures }, "en");
   } catch (error) {
     dispose();
     throw error;

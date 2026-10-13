@@ -43,7 +43,7 @@ def generate() -> dict[str, str]:
             for name, child in value.items():
                 flatten(child, f"{key}.{name}")
     flatten(source(("component", "knx"))["config_panel"], "component.knx.config_panel")
-    for platform in ["light", "sensor"]:
+    for platform in ["light", "sensor", "binary_sensor"]:
         result[f"component.{platform}.title"] = resolved(source(("component", platform))["title"])
     return dict(sorted(result.items()))
 

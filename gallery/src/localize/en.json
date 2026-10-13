@@ -5,7 +5,8 @@
   "separator": "Separator",
   "failed": "The component preview could not be loaded.",
   "backendFixtures": {
-    "component.knx.config_panel.selectors.knx-payload-selector.raw_payload_base_label": "Base"
+    "component.knx.config_panel.selectors.knx-payload-selector.raw_payload_base_label": "Base",
+    "component.knx.config_panel.entities.create.binary_sensor.knx.reset_after.description": "Reset back to “off” state after the specified duration."
   },
   "validation": {
     "invalidJson": "Enter a valid JSON value without prototype keys.",
@@ -926,18 +927,20 @@
       "api": {
         "platform": "Entity platform defining the configuration schema and icon.",
         "invalid": "Show the scenario validation error, or the public invalid styling where supported.",
+        "resetEnabled": "Show a stored reset interval for binary sensors; off previews an unset interval.",
         "knx-validation-error": "Knx validation error",
         "knx-entity-configuration-changed": "Emits knx-entity-configuration-changed with the public event detail.",
         "hass": "Current offline Home Assistant instance supplied by the preview environment.",
         "knx": "Offline KNX instance and local translations supplied by the preview environment.",
         "validationErrors": "Scenario-controlled backend validation errors, using the existing ErrorDescription contract.",
         "config": "Configuration object edited by this component. Changes are reported through its public event.",
-        "schema": "Light schema from the shared fixture factory.",
+        "schema": "Entity schema from the shared fixture factory.",
         "platformStyle": "Derived once when connected from platform; scenario reset recreates the component."
       },
       "labels": {
         "platform": "Platform",
         "invalid": "Invalid",
+        "resetEnabled": "Reset interval set",
         "knx-validation-error": "Knx-validation-error",
         "knx-entity-configuration-changed": "Knx-entity-configuration-changed",
         "hass": "Hass",
@@ -1073,6 +1076,8 @@
     "collapseSeparator": "Collapse separator"
   },
   "scenarios": {
+    "heartbeat-long": "Heartbeat over one day",
+    "heartbeat-unset": "Heartbeat without reset",
     "collapsed": "Collapsed",
     "filters": "Filters",
     "minimal": "Minimal",

@@ -41,8 +41,8 @@ Read product sources and callers; demonstrate a realistic KNX task.
 - Put copy in [en.json](src/localize/en.json). Declare real inputs as `properties`,
   host inputs as `suppliedProperties`, and local switches as `exampleOptions`.
   Document actual events/callbacks/methods/slots; validate structured JSON inputs.
-  `backend-en.json` is a Core snapshot; remove the payload-label supplement in
-  `backendFixtures` when Core supplies it.
+  `backend-en.json` is a Core snapshot; remove pending Core text supplements in
+  `backendFixtures` when the pinned Core revision supplies them.
 - Import components and runtime fixtures inside `load()`, create fresh fixtures,
   cancel asynchronous work with `env.signal`, and reuse [dialog](src/examples/dialog.ts),
   [view](src/examples/view.ts) and [view fixtures](src/fixtures/views.ts) hosts.

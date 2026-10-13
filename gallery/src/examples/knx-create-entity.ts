@@ -8,6 +8,7 @@ export const entry = defineExample({
   suppliedProperties: ["hass", "knx", "route", "narrow"],
   scenarios: [
     { id: "create", label: en.scenarios["create"], values: {} },
+    { id: "heartbeat-long", label: en.scenarios["heartbeat-long"], values: {} },
     { id: "empty", label: en.scenarios["empty"], values: {} },
     { id: "validation-error", label: en.scenarios["validation-error"], values: {} },
     { id: "fetch-error", label: en.scenarios["fetch-error"], values: {} },
@@ -23,6 +24,7 @@ export const entry = defineExample({
     return viewExample("knx-create-entity", "/entities/edit/light.living_room", {
       scenarios: {
         create: { path: "/entities/create/light" },
+        "heartbeat-long": { path: "/entities/create/binary_sensor" },
         empty: { path: "/entities/create" },
         "validation-error": { fixtures: { failEntityValidation: true } },
         "fetch-error": { fixtures: { failCalls: ["knx/get_entity_config"] } },

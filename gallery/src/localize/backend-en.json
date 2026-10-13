@@ -1,4 +1,5 @@
 {
+  "component.binary_sensor.title": "Binary sensor",
   "component.knx.config_panel.common.attention": "Attention",
   "component.knx.config_panel.common.create_binary_sensor": "Create binary sensor",
   "component.knx.config_panel.common.create_sensor": "Create sensor",

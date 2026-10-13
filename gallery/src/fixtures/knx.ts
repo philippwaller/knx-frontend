@@ -92,7 +92,7 @@ export function createKnxFixtures() {
       telegram_max_count: 10000,
     },
     project_info: project.info,
-    supported_platforms: ["light", "sensor"],
+    supported_platforms: ["light", "sensor", "binary_sensor"],
     dpt_metadata: {
       "1.001": {
         dpt_class: "numeric",

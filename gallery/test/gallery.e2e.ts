@@ -4606,6 +4606,43 @@ for (const component of ["knx-device-picker", "knx-configure-entity"]) {
   });
 }
 
+test("binary sensor heartbeat over one day shows seconds and milliseconds", async ({ page }) => {
+  await openExample(page, "knx-configure-entity", "heartbeat-long");
+  const preview = page.frameLocator('iframe[data-pane="primary"]');
+  await expect(preview.locator("knx-configure-entity")).toContainText("specified duration");
+  const duration = preview.locator("knx-configure-entity ha-selector-duration ha-duration-input");
+  await expect(duration).toHaveCount(1);
+  await expect(duration).toHaveJSProperty("enableDay", true);
+  await expect(duration).toHaveJSProperty("enableMillisecond", true);
+  await expect(duration).toHaveJSProperty("allowNegative", false);
+  const time = duration.locator("ha-base-time-input");
+  await expect(time).toHaveJSProperty("days", 1);
+  await expect(time).toHaveJSProperty("hours", 1);
+  await expect(time).toHaveJSProperty("seconds", 1);
+  await expect(time).toHaveJSProperty("milliseconds", 500);
+  await expect(time.locator('input[name="milliseconds"]')).toHaveCount(1);
+});
+
+test("binary sensor without reset keeps the optional Duration field disabled", async ({ page }) => {
+  await openExample(page, "knx-configure-entity", "heartbeat-unset");
+  const preview = page.frameLocator('iframe[data-pane="primary"]');
+  const row = preview.locator("knx-selector-row").filter({ hasText: "Reset after" });
+  await expect(row.locator("ha-switch")).toHaveJSProperty("checked", false);
+  await expect(row.locator("ha-selector-duration")).toHaveCount(0);
+});
+
+test("binary sensor create view shows the Duration field", async ({ page }) => {
+  await openExample(page, "knx-create-entity", "heartbeat-long");
+  const preview = page.frameLocator('iframe[data-pane="primary"]');
+  const row = preview.locator("knx-selector-row").filter({ hasText: "Reset after" });
+  await expect(row).toHaveCount(1);
+  await row.locator("ha-selector.optional-switch").click();
+  await expect(preview.locator("knx-configure-entity ha-selector-duration")).toHaveCount(1);
+  await expect(
+    preview.locator('knx-configure-entity ha-base-time-input input[name="milliseconds"]'),
+  ).toHaveCount(1);
+});
+
 test("outcome migration creates and deletes an entity across Compare readers", async ({ page }) => {
   await page.setViewportSize({ width: 2160, height: 1000 });
   await openExample(page, "knx-entities-view", "empty");

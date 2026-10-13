@@ -25,5 +25,21 @@ export function createSchemas(): Record<string, SelectorSchema[]> {
         },
       },
     ],
+    binary_sensor: [
+      {
+        name: "ga_sensor",
+        type: "knx_group_address",
+        required: true,
+        options: {
+          state: { required: true },
+          validDPTs: [{ main: 1, sub: 1 }],
+        },
+      },
+      {
+        name: "reset_after",
+        type: "ha_selector",
+        selector: { number: { min: 0, step: 0.001, mode: "box", unit_of_measurement: "s" } },
+      },
+    ],
   };
 }
