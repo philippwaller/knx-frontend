@@ -27,7 +27,6 @@ import { entry as sortMenuEntry } from "./examples/knx-sort-menu";
 import { entry as sortMenuItemEntry } from "./examples/knx-sort-menu-item";
 import { entry as formEntry } from "./examples/knx-form";
 import { entry as selectorRowEntry } from "./examples/knx-selector-row";
-import { entry as durationSelectorEntry } from "./examples/knx-duration-selector";
 import { entry as syncStateSelectorRowEntry } from "./examples/knx-sync-state-selector-row";
 import { entry as singleAddressSelectorEntry } from "./examples/knx-single-address-selector";
 import { entry as groupAddressSelectorEntry } from "./examples/knx-group-address-selector";
@@ -99,7 +98,6 @@ export const catalogGroups = [
     entries: [
       formEntry,
       selectorRowEntry,
-      durationSelectorEntry,
       syncStateSelectorRowEntry,
       singleAddressSelectorEntry,
       groupAddressSelectorEntry,

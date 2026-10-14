@@ -37,10 +37,9 @@ export function createSchemas(): Record<string, SelectorSchema[]> {
       },
       {
         name: "reset_after",
-        type: "knx_duration",
+        type: "ha_selector",
         selector: {
           duration: {
-            allow_negative: false,
             enable_day: true,
             enable_millisecond: true,
             enable_second: true,

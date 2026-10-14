@@ -639,24 +639,6 @@
         "backendLocalize": "Backend localize"
       }
     },
-    "knx-duration-selector": {
-      "title": "Duration selector",
-      "description": "Home Assistant Duration input with seconds as its public value.",
-      "api": {
-        "value": "Configured duration in seconds, including milliseconds as fractional seconds.",
-        "disabled": "Disable editing the duration.",
-        "hass": "Current offline Home Assistant instance supplied by the preview environment.",
-        "selector": "Non-negative Duration schema with days and milliseconds enabled.",
-        "value-changed": "Emits the selected duration in seconds, or undefined when cleared."
-      },
-      "labels": {
-        "value": "Seconds",
-        "disabled": "Disabled",
-        "hass": "Hass",
-        "selector": "Selector",
-        "value-changed": "Value-changed"
-      }
-    },
     "knx-selector-row": {
       "title": "Selector row",
       "description": "Home Assistant number or duration selector with optional enable switch and validation.",
@@ -1113,7 +1095,6 @@
     "invalid": "Invalid",
     "optional": "Optional",
     "duration": "Duration",
-    "zero": "Zero",
     "periodic": "Periodic",
     "never": "Never",
     "raw": "Raw",
