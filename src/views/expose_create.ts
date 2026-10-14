@@ -57,7 +57,11 @@ import type { KnxDurationSelectorSchema, KnxHaSelector, GASelectorOptions } from
 import { setNestedValue } from "../utils/config-helper";
 import { exitFlow, navigateInFlow, navigateToError } from "../utils/navigation";
 import { PreventUnsavedMixin } from "../mixins/prevent-unsaved-mixin";
-import { extractValidationErrors, getValidationError } from "../utils/validation";
+import {
+  extractValidationErrors,
+  getValidationError,
+  localizeValidationErrors,
+} from "../utils/validation";
 
 import { knxProjectContext } from "../data/knx-project-context";
 import { KNXLogger } from "../tools/knx-logger";
@@ -859,7 +863,7 @@ export class KNXCreateExpose extends DirtyStateProviderMixin<ExposeConfigData>()
   private _handleResult(result: ExposeResult, final: boolean): boolean {
     if (!result.success) {
       logger.warn("Validation error", result);
-      this._validationErrors = result.errors;
+      this._validationErrors = localizeValidationErrors(this.hass.localize, result.errors);
       this._validationBaseError = result.error_base;
       if (final) {
         setTimeout(() => this._alertElement?.scrollIntoView({ behavior: "smooth" }));
