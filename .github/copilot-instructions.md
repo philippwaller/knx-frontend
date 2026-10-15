@@ -165,6 +165,17 @@ Form fields and sections (`knx-form`, `knx-selector-row`, …) always request `<
 - `/homeassistant-frontend`: Submodule (AI agents should not modify directly)
 - `/test`: Test files that AI agents should maintain and extend
 
+## Gallery examples
+
+Before implementing a new or changed component, dialog or view, read the repository
+[knx-frontend-gallery skill](../.agents/skills/knx-frontend-gallery/SKILL.md).
+Its repository-root path is `.agents/skills/knx-frontend-gallery/SKILL.md`, including
+when reading these instructions through the root `AGENTS.md` symlink.
+Consider its affected gallery examples every time. Create an example for a new
+production custom element, and update affected examples as part of implementation
+when public interfaces, supported states or interaction behavior change. Use the
+skill's maintained references and existing verification entry points.
+
 ## Testing
 
 - **Framework**: Vitest with jsdom

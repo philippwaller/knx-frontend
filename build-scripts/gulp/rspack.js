@@ -3,8 +3,10 @@
 import log from "fancy-log";
 import fs from "fs";
 import gulp from "gulp";
+import path from "node:path";
 import rspack from "@rspack/core";
 import paths from "../paths.cjs";
+import { galleryExclusionStatsOptions } from "../check-gallery-exclusion.mjs";
 import { createKNXConfig } from "../rspack.cjs";
 
 const bothBuilds = (createConfigFunc, params) => [
@@ -37,6 +39,12 @@ const doneHandler = (done) => (err, stats) => {
 
   if (stats.hasErrors() || stats.hasWarnings()) {
     console.log(stats.toString("minimal"));
+  }
+
+  if (process.env.KNX_BUILD_STATS === "1" && done) {
+    const statsPath = path.resolve(paths.root_dir, "build/checks/production.json");
+    fs.mkdirSync(path.dirname(statsPath), { recursive: true });
+    fs.writeFileSync(statsPath, JSON.stringify(stats.toJson(galleryExclusionStatsOptions)));
   }
 
   log(`Build done @ ${new Date().toLocaleTimeString()}`);
