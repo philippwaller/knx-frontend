@@ -112,3 +112,5 @@ declare global {
     "knx-dpt-selector-changed": { key: string; dpt?: string };
   }
 }
+
+// Gallery workflow rehearsal: verify preview updates and direct component links.
