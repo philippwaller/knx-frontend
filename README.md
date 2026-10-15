@@ -27,6 +27,12 @@ $ script/build
 ...
 ```
 
+### KNX Frontend Gallery
+
+The optional [Gallery](gallery/README.md) renders actual components offline with local fixtures.
+Run `pnpm gallery` from the repository root to open it at http://127.0.0.1:8091.
+See its README for example authoring, checks, standalone builds and Pages previews.
+
 ### Update the home assistant frontend
 
 Get the latest release tag.
